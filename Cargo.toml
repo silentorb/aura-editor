@@ -1,0 +1,17 @@
+[package]
+name = "aura_editor"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "GUI frontend and music/audio designer surface for Aura"
+repository = "https://github.com/silentorb/aura-editor"
+
+[[bin]]
+name = "aura-editor"
+path = "src/main.rs"
+
+[dependencies]
+iced = "0.14"
+
+[dev-dependencies]
+iced_test = "0.14"

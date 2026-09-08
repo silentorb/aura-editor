@@ -2,7 +2,7 @@
 
 ## Project
 
-Aura Editor (`aura-editor`) is the GUI frontend and DAW-like surface for Aura. It is oriented as a music/audio **designer** rather than a traditional DAW for manually editing music/audio data. Product UI is not started yet.
+Aura Editor (`aura-editor`) is the GUI frontend and DAW-like surface for Aura. It is oriented as a music/audio **designer** rather than a traditional DAW for manually editing music/audio data. The application stack is Rust with **Iced**.
 
 This repository stays separate so **aura-engine** can remain an independent, headless product. The editor will likely share most engine dependencies and add a larger GUI and OS-integration stack the engine does not need.
 
@@ -39,11 +39,30 @@ Aura development mounts multiple repositories via workbench. Each repo may have 
 
 Orchestration (Compose, Dev Container, multi-repo mounts) lives in **aura-workbench**, not here.
 
+Cursor attaches to the **engine** service by default (engine test suite). Build, test, and run this editor **in the editor service** — not as a place to run engine tests.
+
+## Commands
+
+Run from `/workspaces/aura-workbench/.mnt/aura-editor` **inside the editor container**:
+
+```bash
+cargo build
+cargo test
+cargo clippy
+cargo run
+```
+
+From the attached engine/workbench context:
+
+```bash
+docker compose -f /workspaces/aura-workbench/.devcontainer/docker-compose.yml exec editor bash -lc 'cd /workspaces/aura-workbench/.mnt/aura-editor && cargo test'
+```
+
 ## Naming
 
-Repos and projects use **kebab-case** (`aura-editor`). Packages in this repo should follow the stack’s conventions when added.
+Repos and projects use **kebab-case** (`aura-editor`). Rust crates use **snake_case** (`aura_editor`).
 
 ## Where to look
 
 - [`docs/scoping/`](docs/scoping/) — product motivation, goals, background
-- [`docs/design/`](docs/design/) — declarative product design
+- [`docs/design/`](docs/design/) — declarative product design (including [`testing.md`](docs/design/testing.md))

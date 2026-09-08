@@ -15,10 +15,13 @@ It stays in its own repository so **aura-engine** can remain an independent, hea
 - Carry GUI and OS-integration dependencies that the headless engine should not need, while likely sharing most of the engine’s core dependency set
 - Position the product as a music/audio **designer**, distinct from a traditional DAW
 
-Refined requirements live in [`../design/product.md`](../design/product.md).
+## Application stack
+
+The editor is a **Rust** desktop application using **[Iced](https://iced.rs/)** as the GUI framework. Day-to-day development runs in WSL Linux containers via **aura-workbench**. The intended end-user environment is **Windows**. A dedicated workbench container for Windows cross-compilation is planned later; it is not part of the current skeleton.
+
+Refined requirements live in [`../design/product.md`](../design/product.md) and [`../design/testing.md`](../design/testing.md).
 
 ## Open questions
 
-- UI toolkit and application stack
 - How far hand-crafting of data and configuration goes versus generation and graph-driven workflows
 - How tightly the editor couples to aura-engine APIs versus file/CLI boundaries
