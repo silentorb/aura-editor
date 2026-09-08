@@ -14,6 +14,8 @@ It stays in its own repository so **aura-engine** can remain an independent, hea
 - Support hand-crafting data and configuration where that helps design, without making destructive timeline editing the primary model
 - Carry GUI and OS-integration dependencies that the headless engine should not need, while likely sharing most of the engine’s core dependency set
 - Position the product as a music/audio **designer**, distinct from a traditional DAW
+- Treat **Imp graphs** as the primary persistent resources (flat, orthogonal UX), rather than traditional DAW “projects” and supporting resource trees
+- Provide a multi-document interface so users can open multiple graph documents in tabs
 
 ## Application stack
 
@@ -21,7 +23,14 @@ The editor is a **Rust** desktop application using **[Iced](https://iced.rs/)** 
 
 Refined requirements live in [`../design/product.md`](../design/product.md) and [`../design/testing.md`](../design/testing.md).
 
+## Graphs and files
+
+Single-graph Imp files (`{ nodes, edges }`) are the first document type users open. Multi-graph catalogs use Imp **GraphLibrary** (`definitions[].body`); opening those from the editor comes later. Graph visualization and automatic layout also come later — open documents currently show a blank content pane while the parsed graph is held in memory.
+
+When visualization lands, node layout should be automatic only (no freeform dragging of nodes on a canvas).
+
 ## Open questions
 
 - How far hand-crafting of data and configuration goes versus generation and graph-driven workflows
 - How tightly the editor couples to aura-engine APIs versus file/CLI boundaries
+- Whether everyday authoring stays 1:1 graph-per-file or also embraces GraphLibrary catalogs as first-class multi-document sources

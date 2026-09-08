@@ -4,7 +4,7 @@ GUI frontend and DAW-like surface for [Aura](https://github.com/silentorb/aura-e
 
 ## Status
 
-Rust / [Iced](https://iced.rs/) hello-world skeleton with unit and headless functional tests. Product intent lives under [`docs/`](docs/).
+Rust / [Iced](https://iced.rs/) multi-document shell: open single Imp graph files into tabs with blank document panels (visualization deferred). Product intent lives under [`docs/`](docs/).
 
 ## Development environment
 

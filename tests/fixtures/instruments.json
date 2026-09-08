@@ -1,0 +1,15 @@
+{
+  "id": "aura.test-instruments",
+  "definitions": [
+    {
+      "id": "dummy_voice",
+      "name": "Dummy voice",
+      "inputs": {},
+      "outputs": {},
+      "body": {
+        "nodes": {},
+        "edges": {}
+      }
+    }
+  ]
+}

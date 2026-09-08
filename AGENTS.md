@@ -62,7 +62,12 @@ docker compose -f /workspaces/aura-workbench/.devcontainer/docker-compose.yml ex
 
 Repos and projects use **kebab-case** (`aura-editor`). Rust crates use **snake_case** (`aura_editor`).
 
+## Working conventions
+
+- Follow [`docs/rust-style.md`](docs/rust-style.md) for shared Aura/Imp-aligned Rust conventions, including error handling (DRY link to aura-engine’s style guide).
+
 ## Where to look
 
 - [`docs/scoping/`](docs/scoping/) — product motivation, goals, background
 - [`docs/design/`](docs/design/) — declarative product design (including [`testing.md`](docs/design/testing.md))
+- [`docs/rust-style.md`](docs/rust-style.md) — Rust conventions and error handling (links to aura-engine)

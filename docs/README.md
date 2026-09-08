@@ -30,6 +30,7 @@ Follow [Silent Orb: Scoping and Design](https://silentorb.com/business/product/s
 |------|---------|
 | [`scoping/`](scoping/) | Cross-cutting motivation and context |
 | [`design/`](design/) | Cross-cutting declarative product definition |
+| [`rust-style.md`](rust-style.md) | Shared Aura/Imp-aligned Rust conventions (links to aura-engine) |
 
 ## When to update
 

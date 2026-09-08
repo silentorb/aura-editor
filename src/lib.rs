@@ -3,20 +3,40 @@
 //! Keeps Iced application logic out of `main` so unit and headless functional
 //! tests can exercise state and view without opening a real window.
 
-use iced::widget::{button, column, text};
-use iced::Element;
+mod document;
+mod graph_file;
+
+pub use document::{DocumentId, DocumentStore, GraphDocument};
+pub use graph_file::{load_graph_from_path, load_graph_from_str, OpenError};
+
+use std::path::PathBuf;
+
+use iced::widget::{button, column, container, row, text, Space};
+use iced::{Element, Fill, Task};
 
 /// Root application state for the editor shell.
 #[derive(Debug, Clone, Default)]
 pub struct App {
-    clicked: bool,
+    documents: DocumentStore,
+    /// Last open/load error shown in the status banner.
+    last_error: Option<OpenError>,
 }
 
-/// Messages produced by the hello-world shell.
+/// Messages produced by the multi-document shell.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Message {
-    /// User pressed the primary action button.
-    Clicked,
+    /// User chose Open… from the toolbar.
+    OpenClicked,
+    /// Open the graph at this path (from the dialog or tests).
+    OpenPath(PathBuf),
+    /// Opening a path failed.
+    OpenFailed(OpenError),
+    /// User cancelled the native file dialog.
+    OpenCancelled,
+    /// Activate the tab for this document.
+    SelectTab(DocumentId),
+    /// Close the tab for this document.
+    CloseTab(DocumentId),
 }
 
 impl App {
@@ -27,62 +47,133 @@ impl App {
 
     /// Window title shown by the native shell.
     pub fn title(&self) -> String {
-        String::from("Aura Editor")
+        match self.documents.active_document() {
+            Some(doc) => format!("Aura Editor — {}", doc.title),
+            None => String::from("Aura Editor"),
+        }
+    }
+
+    /// Open document store.
+    pub fn documents(&self) -> &DocumentStore {
+        &self.documents
+    }
+
+    /// Last open error, if any.
+    pub fn last_error(&self) -> Option<&OpenError> {
+        self.last_error.as_ref()
+    }
+
+    /// Status line for empty state or errors.
+    pub fn status(&self) -> String {
+        if let Some(error) = &self.last_error {
+            return error.status_message();
+        }
+        if self.documents.active_document().is_some() {
+            String::from("Ready")
+        } else {
+            String::from("Open a graph file to begin")
+        }
     }
 
     /// Applies a message to application state.
-    pub fn update(&mut self, message: Message) {
+    pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
-            Message::Clicked => {
-                self.clicked = true;
+            Message::OpenClicked => return pick_graph_file(),
+            Message::OpenPath(path) => match load_graph_from_path(&path) {
+                Ok(graph) => {
+                    self.last_error = None;
+                    self.documents.open_or_activate(path, graph);
+                }
+                Err(error) => {
+                    self.last_error = Some(error);
+                }
+            },
+            Message::OpenFailed(error) => {
+                self.last_error = Some(error);
+            }
+            Message::OpenCancelled => {}
+            Message::SelectTab(id) => {
+                self.documents.select(id);
+            }
+            Message::CloseTab(id) => {
+                self.documents.close(id);
             }
         }
+        Task::none()
     }
 
-    /// Builds the hello-world view.
+    /// Builds the multi-document shell view.
     pub fn view(&self) -> Element<'_, Message> {
-        column![
-            text("Hello, Aura"),
+        let toolbar = row![
+            button("Open…").on_press(Message::OpenClicked),
+            Space::new().width(12),
             text(self.status()),
-            button("Click me").on_press(Message::Clicked),
         ]
-        .spacing(12)
-        .padding(24)
-        .into()
+        .spacing(8)
+        .padding(8);
+
+        let tabs = self.tab_bar();
+        let body = self.document_panel();
+
+        column![toolbar, tabs, body].spacing(0).into()
     }
 
-    /// Status line shown under the greeting.
-    pub fn status(&self) -> &'static str {
-        if self.clicked {
-            "Button clicked"
-        } else {
-            "Ready"
+    fn tab_bar(&self) -> Element<'_, Message> {
+        if self.documents.documents().is_empty() {
+            return Space::new().height(0).into();
         }
+
+        let mut tabs = row![].spacing(4).padding([0, 8]);
+        for doc in self.documents.documents() {
+            let active = self.documents.active_id() == Some(doc.id);
+            let label = if active {
+                format!("[{}]", doc.title)
+            } else {
+                doc.title.clone()
+            };
+            tabs = tabs.push(
+                row![
+                    button(text(label)).on_press(Message::SelectTab(doc.id)),
+                    button(text("×")).on_press(Message::CloseTab(doc.id)),
+                ]
+                .spacing(2),
+            );
+        }
+        tabs.into()
     }
 
-    /// Whether the primary button has been clicked.
-    pub fn clicked(&self) -> bool {
-        self.clicked
+    fn document_panel(&self) -> Element<'_, Message> {
+        let content: Element<'_, Message> = if self.documents.active_document().is_some() {
+            // Blank panel until graph visualization lands.
+            Space::new().width(Fill).height(Fill).into()
+        } else {
+            container(text("Open a graph file to begin"))
+                .center_x(Fill)
+                .center_y(Fill)
+                .width(Fill)
+                .height(Fill)
+                .into()
+        };
+
+        container(content)
+            .width(Fill)
+            .height(Fill)
+            .padding(8)
+            .into()
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+fn pick_graph_file() -> Task<Message> {
+    Task::perform(pick_graph_file_async(), |path| match path {
+        Some(path) => Message::OpenPath(path),
+        None => Message::OpenCancelled,
+    })
+}
 
-    #[test]
-    fn new_app_starts_ready() {
-        let app = App::new();
-        assert!(!app.clicked());
-        assert_eq!(app.status(), "Ready");
-        assert_eq!(app.title(), "Aura Editor");
-    }
-
-    #[test]
-    fn clicked_message_updates_status() {
-        let mut app = App::new();
-        app.update(Message::Clicked);
-        assert!(app.clicked());
-        assert_eq!(app.status(), "Button clicked");
-    }
+async fn pick_graph_file_async() -> Option<PathBuf> {
+    rfd::AsyncFileDialog::new()
+        .add_filter("Imp graph", &["json"])
+        .pick_file()
+        .await
+        .map(|file| file.path().to_path_buf())
 }

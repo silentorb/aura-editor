@@ -1,0 +1,40 @@
+{
+  "nodes": {
+    "time": {
+      "id": "time",
+      "type": "time",
+      "inputs": {}
+    },
+    "freq": {
+      "id": "freq",
+      "type": "parameter",
+      "inputs": {
+        "value": 440.0
+      }
+    },
+    "osc": {
+      "id": "osc",
+      "type": "sine",
+      "inputs": {}
+    },
+    "out": {
+      "id": "out",
+      "type": "output",
+      "inputs": {}
+    }
+  },
+  "edges": {
+    "freq_to_osc": {
+      "from": { "node": "freq", "port": "value" },
+      "to": { "node": "osc", "port": "frequency" }
+    },
+    "time_to_osc": {
+      "from": { "node": "time", "port": "time" },
+      "to": { "node": "osc", "port": "time" }
+    },
+    "osc_to_out": {
+      "from": { "node": "osc", "port": "audio" },
+      "to": { "node": "out", "port": "value" }
+    }
+  }
+}
