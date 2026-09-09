@@ -33,29 +33,17 @@ When reversing a direction: add a brief avoided-approach requirement in design; 
 
 ## Workspace
 
-Primary development opens the sibling **aura-workbench** host folder, which starts engine and editor containers via Docker Compose. This repo mounts at `/workspaces/aura-workbench/.mnt/aura-editor`. Prefer workbench as the Cursor entrypoint. Do not treat this repo’s root as the Dev Container entrypoint.
-
-Aura development mounts multiple repositories via workbench. Each repo may have its own `AGENTS.md` and `docs/`. Prefer the nearest `AGENTS.md` and that repo’s `docs/` when working in a given tree. This file governs **aura-editor** only.
-
-Orchestration (Compose, Dev Container, multi-repo mounts) lives in **aura-workbench**, not here.
-
-Cursor attaches to the **engine** service by default (engine test suite). Build, test, and run this editor **in the editor service** — not as a place to run engine tests.
+This file governs **aura-editor** only. Orchestration (Compose, Dev Container, multi-repo mounts) lives in **aura-workbench**, not here.
 
 ## Commands
 
-Run from `/workspaces/aura-workbench/.mnt/aura-editor` **inside the editor container**:
+From the repo root (with GUI system deps available):
 
 ```bash
 cargo build
 cargo test
 cargo clippy
 cargo run
-```
-
-From the attached engine/workbench context:
-
-```bash
-docker compose -f /workspaces/aura-workbench/.devcontainer/docker-compose.yml exec editor bash -lc 'cd /workspaces/aura-workbench/.mnt/aura-editor && cargo test'
 ```
 
 ## Naming
