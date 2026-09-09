@@ -25,9 +25,9 @@ Refined requirements live in [`../design/product.md`](../design/product.md) and 
 
 ## Graphs and files
 
-Single-graph Imp files (`{ nodes, edges }`) are the first document type users open. Multi-graph catalogs use Imp **GraphLibrary** (`definitions[].body`); opening those from the editor comes later. Graph visualization and automatic layout also come later — open documents currently show a blank content pane while the parsed graph is held in memory.
+Single-graph Imp files (`{ nodes, edges }`) are the first document type users open. Multi-graph catalogs use Imp **GraphLibrary** (`definitions[].body`); opening those from the editor comes later.
 
-When visualization lands, node layout should be automatic only (no freeform dragging of nodes on a canvas).
+Open documents show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Node layout is automatic only — no freeform dragging of nodes on a canvas.
 
 ## Open questions
 

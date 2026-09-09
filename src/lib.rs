@@ -5,14 +5,22 @@
 
 mod document;
 mod graph_file;
+mod graph_layout;
+mod graph_view;
 
 pub use document::{DocumentId, DocumentStore, GraphDocument};
 pub use graph_file::{load_graph_from_path, load_graph_from_str, OpenError};
+pub use graph_layout::{layout_graph, GraphLayout, LaidOutNode};
+pub use graph_view::{
+    center_translation, clamp_scale, pan_by, zoom_at_point, GraphView,
+};
 
 use std::path::PathBuf;
 
 use iced::widget::{button, column, container, row, text, Space};
 use iced::{Element, Fill, Task};
+
+use crate::graph_view::graph_canvas;
 
 /// Root application state for the editor shell.
 #[derive(Debug, Clone, Default)]
@@ -143,9 +151,9 @@ impl App {
     }
 
     fn document_panel(&self) -> Element<'_, Message> {
-        let content: Element<'_, Message> = if self.documents.active_document().is_some() {
-            // Blank panel until graph visualization lands.
-            Space::new().width(Fill).height(Fill).into()
+        let content: Element<'_, Message> = if let Some(doc) = self.documents.active_document()
+        {
+            graph_canvas(doc.id, &doc.graph)
         } else {
             container(text("Open a graph file to begin"))
                 .center_x(Fill)
