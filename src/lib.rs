@@ -7,6 +7,7 @@ mod document;
 mod graph_file;
 mod graph_layout;
 mod graph_view;
+mod logging;
 
 pub use document::{DocumentId, DocumentStore, GraphDocument};
 pub use graph_file::{load_graph_from_path, load_graph_from_str, OpenError};
@@ -14,6 +15,7 @@ pub use graph_layout::{layout_graph, GraphLayout, LaidOutNode};
 pub use graph_view::{
     center_translation, clamp_scale, pan_by, zoom_at_point, GraphView,
 };
+pub use logging::init_logging;
 
 use std::path::PathBuf;
 
