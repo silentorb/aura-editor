@@ -19,7 +19,7 @@ It stays in its own repository so **aura-engine** can remain an independent, hea
 
 ## Application stack
 
-The editor is a **Rust** desktop application using **[Iced](https://iced.rs/)** as the GUI framework. Day-to-day development runs in WSL Linux containers via **aura-workbench**. The intended end-user environment is **Windows**. A dedicated workbench container for Windows cross-compilation is planned later; it is not part of the current skeleton.
+The editor is a **Rust** desktop application using **[Iced](https://iced.rs/)** as the GUI framework. Day-to-day development runs in WSL Linux containers via **aura-workbench**. The intended end-user environment is **Windows**. Workbench provides an on-demand Windows MSVC cross-compile service for shipping the editor binary.
 
 Refined requirements live in [`../design/product.md`](../design/product.md) and [`../design/testing.md`](../design/testing.md).
 

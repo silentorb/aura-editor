@@ -56,7 +56,7 @@ Repos and projects use kebab-case. Rust packages use snake_case (`aura_editor`).
 - The workbench **editor** image may derive from the **engine** image while the engine image stays lean (shared Rust toolchain and light audio build deps).
 - If the engine image later accumulates substantial dependencies the editor does not need, stop deriving editor from engine and introduce a shared base image instead.
 - The editor container is for editor build, test, and run only. It is not a place to run the engine test suite.
-- Day-to-day development uses WSL Linux containers. End users target Windows. A dedicated Windows cross-compile container in workbench is a future requirement, not a current one.
+- Day-to-day development uses WSL Linux containers. End users target Windows. Workbench provides an on-demand **editor-windows** service (`cargo-xwin`, `x86_64-pc-windows-msvc`) that writes `aura-editor.exe` to a configurable host output mount.
 
 ## Non-goals / avoided approaches
 
@@ -65,7 +65,6 @@ Repos and projects use kebab-case. Rust packages use snake_case (`aura_editor`).
 - Treating hand-crafted data as a replacement for procedural, declarative composition rather than a complement to it
 - Embedding workbench orchestration (Compose / Dev Container entrypoint) inside this editor repo
 - Running the aura-engine test suite inside the editor container
-- Shipping or requiring a Windows cross-compile toolchain in the current skeleton
 - Freeform manual node placement on a canvas (layout stays automatic)
 - Persisting pan/zoom camera per document across sessions
 - Opening GraphLibrary catalogs as editor documents until that flow is designed
