@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "bindings": [
+    {
+      "command": "document.open",
+      "when": { "type": "key", "key": "o", "modifiers": ["ctrl"] }
+    },
+    {
+      "command": "document.close_active",
+      "when": { "type": "key", "key": "w", "modifiers": ["ctrl"] }
+    }
+  ]
+}

@@ -11,6 +11,7 @@ Declarative testing requirements for Aura Editor. Product context: [`product.md`
 ## What to test
 
 - Pure application state and `update` logic (unit tests).
+- Bindings JSON parse/load chain, trigger resolve, and command dispatch (unit tests; do not depend on the real user config directory).
 - Stable headless UI interactions via Iced’s testing support (`iced_test` Simulator and similar): basic clicks, key events, and presence of labeled controls/text when selectors are reliable.
 - Invariants that do not depend on timing, pixel layout, or audio output.
 

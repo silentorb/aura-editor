@@ -21,13 +21,19 @@ It stays in its own repository so **aura-engine** can remain an independent, hea
 
 The editor is a **Rust** desktop application using **[Iced](https://iced.rs/)** as the GUI framework. Day-to-day development runs in WSL Linux containers via **aura-workbench**. The intended end-user environment is **Windows**. Workbench provides an on-demand Windows MSVC cross-compile service for shipping the editor binary.
 
-Refined requirements live in [`../design/product.md`](../design/product.md) and [`../design/testing.md`](../design/testing.md).
+Refined requirements live in [`../design/product.md`](../design/product.md), [`../design/input-bindings.md`](../design/input-bindings.md), and [`../design/testing.md`](../design/testing.md).
 
 ## Graphs and files
 
 Single-graph Imp files (`{ nodes, edges }`) are the first document type users open. Multi-graph catalogs use Imp **GraphLibrary** (`definitions[].body`); opening those from the editor comes later.
 
 Open documents show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Node layout is automatic only — no freeform dragging of nodes on a canvas.
+
+## Input and commands
+
+Users need a configurable layer between raw input and editor actions so shortcuts (and later other input) can be remapped without hard-coding keystrokes in UI code. Keyboard is the first source; the same command ids should stay usable from toolbar controls and from a future bindings editor. Prefer hand-editable JSON (user file overriding a bundled default) ahead of building that UI. The app should still run when no bindings file is present. Native OS input commands (clipboard, quit, window manager, and similar) stay outside this layer.
+
+Refined requirements: [`../design/input-bindings.md`](../design/input-bindings.md).
 
 ## Open questions
 

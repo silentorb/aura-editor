@@ -37,6 +37,12 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Editing nodes/connections later regenerates layout.
 - Port-level connection detail is not required in the initial view (node-level edges are enough).
 
+## Input bindings
+
+- User input maps to editor **commands** through a configurable bindings layer (keyboard first). See [`input-bindings.md`](input-bindings.md).
+- Bindings load from an optional user JSON file, else a bundled default, else empty; the app runs without bindings.
+- Toolbar and other UI may invoke the same commands without going through bindings.
+
 ## Repository boundaries
 
 - **aura-editor** (this repo) owns the editor UI product, its docs, and its application stack.
@@ -69,5 +75,6 @@ Repos and projects use kebab-case. Rust packages use snake_case (`aura_editor`).
 - Persisting pan/zoom camera per document across sessions
 - Opening GraphLibrary catalogs as editor documents until that flow is designed
 - Creating, editing, or saving graph documents in the current read-only open slice
+- Overriding native OS input commands via the bindings layer
 
 Background: [`../scoping/background.md`](../scoping/background.md).

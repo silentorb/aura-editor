@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use aura_editor::{App, Message};
+use aura_editor::{App, Bindings, Message};
 use iced_test::simulator;
 
 fn fixture(name: &str) -> PathBuf {
@@ -11,9 +11,13 @@ fn fixture(name: &str) -> PathBuf {
         .join(name)
 }
 
+fn test_app() -> App {
+    App::with_bindings(Bindings::empty())
+}
+
 #[test]
 fn empty_state_prompts_to_open() {
-    let app = App::new();
+    let app = test_app();
     let mut ui = simulator(app.view());
 
     assert!(ui.find("Open…").is_ok());
@@ -22,7 +26,7 @@ fn empty_state_prompts_to_open() {
 
 #[test]
 fn open_path_creates_tab_and_close_restores_empty_state() {
-    let mut app = App::new();
+    let mut app = test_app();
     let path = fixture("sine.json");
 
     let _ = app.update(Message::OpenPath(path.clone()));
@@ -46,7 +50,7 @@ fn open_path_creates_tab_and_close_restores_empty_state() {
 
 #[test]
 fn open_graph_library_surfaces_typed_error() {
-    let mut app = App::new();
+    let mut app = test_app();
     let _ = app.update(Message::OpenPath(fixture("instruments.json")));
 
     assert!(app.documents().documents().is_empty());

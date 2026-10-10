@@ -3,12 +3,16 @@
 //! Keeps Iced application logic out of `main` so unit and headless functional
 //! tests can exercise state and view without opening a real window.
 
+mod bindings;
+mod command;
 mod document;
 mod graph_file;
 mod graph_layout;
 mod graph_view;
 mod logging;
 
+pub use bindings::{user_bindings_path, Bindings, DEFAULT_BINDINGS_JSON};
+pub use command::CommandId;
 pub use document::{DocumentId, DocumentStore, GraphDocument};
 pub use graph_file::{load_graph_from_path, load_graph_from_str, OpenError};
 pub use graph_layout::{layout_graph, GraphLayout, LaidOutNode};
@@ -19,17 +23,20 @@ pub use logging::init_logging;
 
 use std::path::PathBuf;
 
+use iced::keyboard::{self, Key, Modifiers};
 use iced::widget::{button, column, container, row, text, Space};
-use iced::{Element, Fill, Task};
+use iced::{Element, Fill, Subscription, Task};
 
 use crate::graph_view::graph_canvas;
 
 /// Root application state for the editor shell.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct App {
     documents: DocumentStore,
     /// Last open/load error shown in the status banner.
     last_error: Option<OpenError>,
+    /// Resolved input bindings (may be empty).
+    bindings: Bindings,
 }
 
 /// Messages produced by the multi-document shell.
@@ -47,12 +54,34 @@ pub enum Message {
     SelectTab(DocumentId),
     /// Close the tab for this document.
     CloseTab(DocumentId),
+    /// Uncaptured keyboard input for bindings resolution.
+    KeyInput {
+        key: Key,
+        modifiers: Modifiers,
+    },
+    /// Run a bindable command (from bindings or tests).
+    Command(CommandId),
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self::with_bindings(Bindings::empty())
+    }
 }
 
 impl App {
-    /// Creates the initial application state.
+    /// Creates the initial application state with the production bindings load chain.
     pub fn new() -> Self {
-        Self::default()
+        Self::with_bindings(Bindings::load())
+    }
+
+    /// Creates an app with an explicit bindings table (tests and tooling).
+    pub fn with_bindings(bindings: Bindings) -> Self {
+        Self {
+            documents: DocumentStore::default(),
+            last_error: None,
+            bindings,
+        }
     }
 
     /// Window title shown by the native shell.
@@ -66,6 +95,11 @@ impl App {
     /// Open document store.
     pub fn documents(&self) -> &DocumentStore {
         &self.documents
+    }
+
+    /// Active input bindings.
+    pub fn bindings(&self) -> &Bindings {
+        &self.bindings
     }
 
     /// Last open error, if any.
@@ -83,6 +117,19 @@ impl App {
         } else {
             String::from("Open a graph file to begin")
         }
+    }
+
+    /// Keyboard subscription: uncaptured key presses become [`Message::KeyInput`].
+    pub fn subscription(&self) -> Subscription<Message> {
+        keyboard::listen().filter_map(|event| match event {
+            keyboard::Event::KeyPressed {
+                key,
+                modifiers,
+                repeat: false,
+                ..
+            } => Some(Message::KeyInput { key, modifiers }),
+            _ => None,
+        })
     }
 
     /// Applies a message to application state.
@@ -108,6 +155,19 @@ impl App {
             Message::CloseTab(id) => {
                 self.documents.close(id);
             }
+            Message::KeyInput { key, modifiers } => {
+                if let Some(command) = self.bindings.resolve(&key, modifiers) {
+                    return self.update(Message::Command(command));
+                }
+            }
+            Message::Command(command) => match command {
+                CommandId::DocumentOpen => return pick_graph_file(),
+                CommandId::DocumentCloseActive => {
+                    if let Some(id) = self.documents.active_id() {
+                        self.documents.close(id);
+                    }
+                }
+            },
         }
         Task::none()
     }
