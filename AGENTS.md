@@ -40,9 +40,9 @@ This file governs **aura-editor** only. Orchestration (Compose, Dev Container, m
 From the repo root (with GUI system deps available):
 
 ```bash
-cargo build
-cargo test
-cargo clippy
+cargo build --workspace
+cargo test --workspace
+cargo clippy --workspace
 cargo run
 ```
 
@@ -57,5 +57,6 @@ Repos and projects use **kebab-case** (`aura-editor`). Rust crates use **snake_c
 ## Where to look
 
 - [`docs/scoping/`](docs/scoping/) — product motivation, goals, background
-- [`docs/design/`](docs/design/) — declarative product design (including [`testing.md`](docs/design/testing.md))
+- [`docs/design/`](docs/design/) — declarative product design (including [`testing.md`](docs/design/testing.md) and [`extensions.md`](docs/design/extensions.md))
+- [`docs/design/extensions.md`](docs/design/extensions.md) — extension system (commands, views, config)
 - [`docs/rust-style.md`](docs/rust-style.md) — Rust conventions and error handling (links to aura-engine)

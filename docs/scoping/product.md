@@ -21,7 +21,7 @@ It stays in its own repository so **aura-engine** can remain an independent, hea
 
 The editor is a **Rust** desktop application using **[Iced](https://iced.rs/)** as the GUI framework. Day-to-day development runs in WSL Linux containers via **aura-workbench**. The intended end-user environment is **Windows**. Workbench provides an on-demand Windows MSVC cross-compile service for shipping the editor binary.
 
-Refined requirements live in [`../design/product.md`](../design/product.md), [`../design/input-bindings.md`](../design/input-bindings.md), and [`../design/testing.md`](../design/testing.md).
+Refined requirements live in [`../design/product.md`](../design/product.md), [`../design/extensions.md`](../design/extensions.md), [`../design/input-bindings.md`](../design/input-bindings.md), and [`../design/testing.md`](../design/testing.md). Extension motivation: [`extensions.md`](extensions.md).
 
 ## Graphs and files
 

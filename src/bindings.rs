@@ -1,6 +1,6 @@
 //! Configurable input→command bindings loaded from JSON.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -64,18 +64,22 @@ impl Bindings {
         Self::default()
     }
 
-    /// Load using the production chain: user file, else bundled default, else empty.
-    pub fn load() -> Self {
+    /// Load using the production chain against `known_commands`.
+    pub fn load(known_commands: &HashSet<String>) -> Self {
         let user_path = user_bindings_path();
-        Self::load_chain(user_path.as_deref(), DEFAULT_BINDINGS_JSON)
+        Self::load_chain(user_path.as_deref(), DEFAULT_BINDINGS_JSON, known_commands)
     }
 
     /// Load with an explicit user path (tests) and a default JSON string.
-    pub fn load_chain(user_path: Option<&Path>, default_json: &str) -> Self {
+    pub fn load_chain(
+        user_path: Option<&Path>,
+        default_json: &str,
+        known_commands: &HashSet<String>,
+    ) -> Self {
         if let Some(path) = user_path {
             if path.is_file() {
                 match fs::read_to_string(path) {
-                    Ok(contents) => match Self::from_json_str(&contents) {
+                    Ok(contents) => match Self::from_json_str(&contents, known_commands) {
                         Ok(bindings) => {
                             info!(
                                 path = %path.display(),
@@ -103,7 +107,7 @@ impl Bindings {
             }
         }
 
-        match Self::from_json_str(default_json) {
+        match Self::from_json_str(default_json, known_commands) {
             Ok(bindings) => {
                 info!(
                     count = bindings.len(),
@@ -121,8 +125,11 @@ impl Bindings {
         }
     }
 
-    /// Parse bindings from a JSON string.
-    pub fn from_json_str(json: &str) -> Result<Self, String> {
+    /// Parse bindings from a JSON string, skipping ids not in `known_commands`.
+    pub fn from_json_str(
+        json: &str,
+        known_commands: &HashSet<String>,
+    ) -> Result<Self, String> {
         let file: BindingsFile =
             serde_json::from_str(json).map_err(|e| e.to_string())?;
         if file.version != SUPPORTED_VERSION {
@@ -134,13 +141,14 @@ impl Bindings {
 
         let mut key_map = HashMap::new();
         for entry in file.bindings {
-            let Some(command) = CommandId::parse(&entry.command) else {
+            if !known_commands.contains(&entry.command) {
                 warn!(
                     command = %entry.command,
                     "skipping unknown command id in bindings"
                 );
                 continue;
-            };
+            }
+            let command = CommandId::new(entry.command.clone());
 
             match entry.when {
                 TriggerFile::Key { key, modifiers } => {
@@ -157,7 +165,7 @@ impl Bindings {
                     };
                     if key_map.insert(binding, command).is_some() {
                         warn!(
-                            command = %command.as_str(),
+                            command = %entry.command,
                             "duplicate input trigger; last binding wins"
                         );
                     }
@@ -189,7 +197,7 @@ impl Bindings {
             key: binding_key,
             modifiers: modifiers.bits(),
         };
-        self.key_map.get(&binding).copied()
+        self.key_map.get(&binding).cloned()
     }
 }
 
@@ -297,29 +305,41 @@ fn named_key_from_str(name: &str) -> Option<Named> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aura_interfaces::{CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_OPEN};
+
+    fn known() -> HashSet<String> {
+        HashSet::from([
+            CMD_DOCUMENT_OPEN.to_string(),
+            CMD_DOCUMENT_CLOSE_ACTIVE.to_string(),
+        ])
+    }
 
     #[test]
     fn parses_default_bindings() {
-        let bindings = Bindings::from_json_str(DEFAULT_BINDINGS_JSON).unwrap();
+        let bindings = Bindings::from_json_str(DEFAULT_BINDINGS_JSON, &known()).unwrap();
         assert_eq!(bindings.len(), 2);
 
         let open = bindings.resolve(
             &Key::Character("o".into()),
             Modifiers::CTRL,
         );
-        assert_eq!(open, Some(CommandId::DocumentOpen));
+        assert_eq!(open.as_ref().map(CommandId::as_str), Some(CMD_DOCUMENT_OPEN));
 
         let close = bindings.resolve(
             &Key::Character("W".into()),
             Modifiers::CTRL,
         );
-        assert_eq!(close, Some(CommandId::DocumentCloseActive));
+        assert_eq!(
+            close.as_ref().map(CommandId::as_str),
+            Some(CMD_DOCUMENT_CLOSE_ACTIVE)
+        );
     }
 
     #[test]
     fn rejects_unsupported_version() {
         let err = Bindings::from_json_str(
             r#"{"version": 99, "bindings": []}"#,
+            &known(),
         )
         .unwrap_err();
         assert!(err.contains("unsupported bindings version"));
@@ -341,18 +361,22 @@ mod tests {
                 }
               ]
             }"#,
+            &known(),
         )
         .unwrap();
         assert_eq!(bindings.len(), 1);
         assert_eq!(
-            bindings.resolve(&Key::Character("o".into()), Modifiers::CTRL),
-            Some(CommandId::DocumentOpen)
+            bindings
+                .resolve(&Key::Character("o".into()), Modifiers::CTRL)
+                .as_ref()
+                .map(CommandId::as_str),
+            Some(CMD_DOCUMENT_OPEN)
         );
     }
 
     #[test]
     fn modifiers_must_match_exactly() {
-        let bindings = Bindings::from_json_str(DEFAULT_BINDINGS_JSON).unwrap();
+        let bindings = Bindings::from_json_str(DEFAULT_BINDINGS_JSON, &known()).unwrap();
         assert!(bindings
             .resolve(
                 &Key::Character("o".into()),
@@ -387,11 +411,15 @@ mod tests {
         )
         .unwrap();
 
-        let bindings = Bindings::load_chain(Some(&user), DEFAULT_BINDINGS_JSON);
+        let bindings =
+            Bindings::load_chain(Some(&user), DEFAULT_BINDINGS_JSON, &known());
         assert_eq!(bindings.len(), 1);
         assert_eq!(
-            bindings.resolve(&Key::Character("q".into()), Modifiers::CTRL),
-            Some(CommandId::DocumentCloseActive)
+            bindings
+                .resolve(&Key::Character("q".into()), Modifiers::CTRL)
+                .as_ref()
+                .map(CommandId::as_str),
+            Some(CMD_DOCUMENT_CLOSE_ACTIVE)
         );
         assert!(bindings
             .resolve(&Key::Character("o".into()), Modifiers::CTRL)
@@ -404,13 +432,13 @@ mod tests {
     fn load_chain_falls_back_to_default_when_user_missing() {
         let missing = PathBuf::from("/tmp/aura-editor-bindings-does-not-exist.json");
         let bindings =
-            Bindings::load_chain(Some(&missing), DEFAULT_BINDINGS_JSON);
+            Bindings::load_chain(Some(&missing), DEFAULT_BINDINGS_JSON, &known());
         assert_eq!(bindings.len(), 2);
     }
 
     #[test]
     fn load_chain_empty_when_default_invalid() {
-        let bindings = Bindings::load_chain(None, "{not json");
+        let bindings = Bindings::load_chain(None, "{not json", &known());
         assert!(bindings.is_empty());
     }
 
@@ -426,11 +454,15 @@ mod tests {
                 }
               ]
             }"#,
+            &known(),
         )
         .unwrap();
         assert_eq!(
-            bindings.resolve(&Key::Named(Named::Escape), Modifiers::empty()),
-            Some(CommandId::DocumentOpen)
+            bindings
+                .resolve(&Key::Named(Named::Escape), Modifiers::empty())
+                .as_ref()
+                .map(CommandId::as_str),
+            Some(CMD_DOCUMENT_OPEN)
         );
     }
 }

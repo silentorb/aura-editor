@@ -6,6 +6,7 @@
 mod bindings;
 mod command;
 mod document;
+mod extensions;
 mod graph_file;
 mod graph_layout;
 mod graph_view;
@@ -14,12 +15,19 @@ mod logging;
 pub use bindings::{user_bindings_path, Bindings, DEFAULT_BINDINGS_JSON};
 pub use command::CommandId;
 pub use document::{DocumentId, DocumentStore, GraphDocument};
+pub use extensions::{
+    register_linked_extensions, ExtensionRuntime, RegistrationHost, DEFAULT_EXTENSIONS_JSON,
+};
 pub use graph_file::{load_graph_from_path, load_graph_from_str, OpenError};
 pub use graph_layout::{layout_graph, GraphLayout, LaidOutNode};
 pub use graph_view::{
     center_translation, clamp_scale, pan_by, zoom_at_point, GraphView,
 };
 pub use logging::init_logging;
+
+pub use aura_interfaces::{
+    CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_OPEN, ROLE_IMP_GRAPH, VIEW_GRAPH_DAG,
+};
 
 use std::path::PathBuf;
 
@@ -37,6 +45,8 @@ pub struct App {
     last_error: Option<OpenError>,
     /// Resolved input bindings (may be empty).
     bindings: Bindings,
+    /// Extension command/view registries.
+    extensions: ExtensionRuntime,
 }
 
 /// Messages produced by the multi-document shell.
@@ -70,17 +80,25 @@ impl Default for App {
 }
 
 impl App {
-    /// Creates the initial application state with the production bindings load chain.
+    /// Creates the initial application state with bundled extensions and bindings.
     pub fn new() -> Self {
-        Self::with_bindings(Bindings::load())
+        let extensions = ExtensionRuntime::load_bundled();
+        let bindings = Bindings::load(extensions.command_ids());
+        Self::with_extensions(extensions, bindings)
     }
 
-    /// Creates an app with an explicit bindings table (tests and tooling).
+    /// Creates an app with bundled extensions and an explicit bindings table.
     pub fn with_bindings(bindings: Bindings) -> Self {
+        Self::with_extensions(ExtensionRuntime::load_bundled(), bindings)
+    }
+
+    /// Creates an app with explicit extension registries and bindings (tests).
+    pub fn with_extensions(extensions: ExtensionRuntime, bindings: Bindings) -> Self {
         Self {
             documents: DocumentStore::default(),
             last_error: None,
             bindings,
+            extensions,
         }
     }
 
@@ -100,6 +118,11 @@ impl App {
     /// Active input bindings.
     pub fn bindings(&self) -> &Bindings {
         &self.bindings
+    }
+
+    /// Extension registries.
+    pub fn extensions(&self) -> &ExtensionRuntime {
+        &self.extensions
     }
 
     /// Last open error, if any.
@@ -160,14 +183,20 @@ impl App {
                     return self.update(Message::Command(command));
                 }
             }
-            Message::Command(command) => match command {
-                CommandId::DocumentOpen => return pick_graph_file(),
-                CommandId::DocumentCloseActive => {
-                    if let Some(id) = self.documents.active_id() {
-                        self.documents.close(id);
-                    }
+            Message::Command(command) => {
+                if !self.extensions.has_command(command.as_str()) {
+                    return Task::none();
                 }
-            },
+                match command.as_str() {
+                    CMD_DOCUMENT_OPEN => return pick_graph_file(),
+                    CMD_DOCUMENT_CLOSE_ACTIVE => {
+                        if let Some(id) = self.documents.active_id() {
+                            self.documents.close(id);
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
         Task::none()
     }
@@ -215,7 +244,15 @@ impl App {
     fn document_panel(&self) -> Element<'_, Message> {
         let content: Element<'_, Message> = if let Some(doc) = self.documents.active_document()
         {
-            graph_canvas(doc.id, &doc.graph)
+            match self.extensions.view_for_role(ROLE_IMP_GRAPH) {
+                Some(VIEW_GRAPH_DAG) => graph_canvas(doc.id, &doc.graph),
+                Some(other) => view_error_placeholder(format!(
+                    "No host adapter for view `{other}` (role `{ROLE_IMP_GRAPH}`)"
+                )),
+                None => view_error_placeholder(format!(
+                    "No enabled view for role `{ROLE_IMP_GRAPH}`"
+                )),
+            }
         } else {
             container(text("Open a graph file to begin"))
                 .center_x(Fill)
@@ -231,6 +268,15 @@ impl App {
             .padding(8)
             .into()
     }
+}
+
+fn view_error_placeholder(message: String) -> Element<'static, Message> {
+    container(text(message))
+        .center_x(Fill)
+        .center_y(Fill)
+        .width(Fill)
+        .height(Fill)
+        .into()
 }
 
 fn pick_graph_file() -> Task<Message> {

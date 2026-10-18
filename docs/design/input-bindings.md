@@ -21,14 +21,14 @@ Declarative requirements for configurable input→command bindings. Motivation: 
 - Top-level fields: `version` (number) and `bindings` (array).
 - Each binding has `command` (stable string id) and `when` (input trigger).
 - Key triggers use `type` `key`, a `key` string (character or named key), and `modifiers` as a subset of `ctrl`, `alt`, `shift`, `logo`. The modifier set on the event must match exactly.
-- Unknown command ids in a file are skipped (with logging) so files can outlive a given build.
 - One trigger maps to at most one command; if duplicates appear, the last entry wins.
 - Multiple bindings may target the same command.
 
 ## Commands
 
-- Commands are identified by stable string ids and a known set in code.
-- Initial commands: `document.open` (open graph file dialog) and `document.close_active` (close the active tab, or no-op when none).
+- Commands are identified by stable string ids and come from the extension **command** registry (see [`extensions.md`](extensions.md)).
+- Initial builtin commands: `document.open` (open graph file dialog) and `document.close_active` (close the active tab, or no-op when none).
+- Unknown command ids in a bindings file are skipped when they are not present in the command registry, so files can outlive a given build or disabled components.
 - The editor does not expose or override native OS input commands (clipboard, quit, window manager, and similar). Defaults must not claim those shortcuts.
 
 ## Runtime

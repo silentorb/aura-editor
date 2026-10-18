@@ -4,7 +4,7 @@ GUI frontend and DAW-like surface for [Aura](https://github.com/silentorb/aura-e
 
 ## Status
 
-Rust / [Iced](https://iced.rs/) multi-document shell: open single Imp graph files into tabs and view them as an automatic Canvas DAG (pan/zoom; no freeform node placement). Product intent lives under [`docs/`](docs/).
+Rust / [Iced](https://iced.rs/) multi-document shell: open single Imp graph files into tabs and view them as an automatic Canvas DAG (pan/zoom; no freeform node placement). Commands and views register as extension components (see [`docs/design/extensions.md`](docs/design/extensions.md)). Product intent lives under [`docs/`](docs/).
 
 ## Development
 

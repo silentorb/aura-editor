@@ -1,29 +1,37 @@
-//! Stable editor command identifiers.
+//! Stable editor command identifiers (string ids from the extension registry).
 
-/// A bindable editor command.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum CommandId {
-    /// Open a graph file via the native dialog.
-    DocumentOpen,
-    /// Close the active document tab, if any.
-    DocumentCloseActive,
-}
+use std::fmt;
+
+/// A bindable editor command id.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct CommandId(String);
 
 impl CommandId {
-    /// Stable string id used in bindings JSON.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::DocumentOpen => "document.open",
-            Self::DocumentCloseActive => "document.close_active",
-        }
+    /// Creates a command id from a string.
+    pub fn new(id: impl Into<String>) -> Self {
+        Self(id.into())
     }
 
-    /// Parses a known command id. Unknown ids return `None`.
-    pub fn parse(id: &str) -> Option<Self> {
-        match id {
-            "document.open" => Some(Self::DocumentOpen),
-            "document.close_active" => Some(Self::DocumentCloseActive),
-            _ => None,
-        }
+    /// Stable string id used in bindings JSON and the command registry.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for CommandId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl From<&str> for CommandId {
+    fn from(value: &str) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<String> for CommandId {
+    fn from(value: String) -> Self {
+        Self::new(value)
     }
 }

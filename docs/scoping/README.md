@@ -25,4 +25,5 @@ Optimize for **capture** over perfect organization. Prefer adding a short note t
 | Document | Description |
 |----------|-------------|
 | [`product.md`](product.md) | Vision, goals, open questions |
+| [`extensions.md`](extensions.md) | Why components+config instead of plugins |
 | [`background.md`](background.md) | Repo split, dependency expectations, DAW contrast |

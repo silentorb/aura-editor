@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "extensions": [
+    {
+      "id": "aura-builtin",
+      "enabled": true,
+      "params": {}
+    }
+  ],
+  "components": [
+    {
+      "id": "document.open",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "document.open",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "document.close_active",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "document.close_active",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "graph-dag",
+      "extensionId": "aura-builtin",
+      "kind": "view",
+      "implementationId": "graph-dag",
+      "roles": ["imp-graph"],
+      "enabled": true,
+      "params": {}
+    }
+  ]
+}

@@ -21,8 +21,9 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Users can open a single-graph Imp JSON file (`{ nodes, edges }`), switch tabs, and close documents.
 - Opening a path that is already open activates that tab (no duplicate).
 - An open document holds the parsed Imp `Graph` in memory.
-- The document content pane shows an automatic DAG view of the open graph (nodes, ids/types, and edges) with pan and zoom.
+- The document content pane resolves a **view** from the extension registry by document role (`imp-graph` for Imp single-graph documents). The builtin `graph-dag` view shows an automatic DAG (nodes, ids/types, and edges) with pan and zoom.
 - Open is read-only for now: creating, modifying, and saving documents are out of scope until designed.
+- Extensibility (commands, views, and later document types) follows [`extensions.md`](extensions.md).
 
 ## Graph files
 
@@ -40,6 +41,7 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 ## Input bindings
 
 - User input maps to editor **commands** through a configurable bindings layer (keyboard first). See [`input-bindings.md`](input-bindings.md).
+- Commands are extension components registered by stable string id; see [`extensions.md`](extensions.md).
 - Bindings load from an optional user JSON file, else a bundled default, else empty; the app runs without bindings.
 - Toolbar and other UI may invoke the same commands without going through bindings.
 

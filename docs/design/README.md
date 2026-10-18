@@ -28,5 +28,6 @@ See [Silent Orb: Scoping and Design](https://silentorb.com/business/product/scop
 | Document | Description |
 |----------|-------------|
 | [`product.md`](product.md) | Product-level declarative requirements |
+| [`extensions.md`](extensions.md) | Extension system: components, config, command/view kinds |
 | [`input-bindings.md`](input-bindings.md) | Configurable input→command bindings |
 | [`testing.md`](testing.md) | Unit and functional testing requirements |
