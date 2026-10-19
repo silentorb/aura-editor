@@ -207,13 +207,13 @@ fn assign_ranks(graph: &DiGraph<NodeId, ()>) -> BTreeMap<NodeIndex, u32> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::load_graph_from_path;
     use std::path::PathBuf;
 
     fn sine_graph() -> Graph {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/sine.json");
-        load_graph_from_path(path).expect("sine fixture")
+        let text = std::fs::read_to_string(path).expect("read sine fixture");
+        serde_json::from_str(&text).expect("parse sine fixture")
     }
 
     #[test]

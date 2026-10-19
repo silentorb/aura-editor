@@ -32,6 +32,38 @@
       "roles": ["imp-graph"],
       "enabled": true,
       "params": {}
+    },
+    {
+      "id": "json",
+      "extensionId": "aura-builtin",
+      "kind": "document-type",
+      "implementationId": "json",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "aura-json",
+      "extensionId": "aura-builtin",
+      "kind": "document-type",
+      "implementationId": "aura-json",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "imp-graph",
+      "extensionId": "aura-builtin",
+      "kind": "document-type",
+      "implementationId": "imp-graph",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "imp-graph-library",
+      "extensionId": "aura-builtin",
+      "kind": "document-type",
+      "implementationId": "imp-graph-library",
+      "enabled": true,
+      "params": {}
     }
   ]
 }

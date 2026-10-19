@@ -83,6 +83,35 @@ fn disabled_command_is_ignored() {
           "kind": "command",
           "implementationId": "document.close_active",
           "enabled": false
+        },
+        {
+          "id": "json",
+          "extensionId": "aura-builtin",
+          "kind": "document-type",
+          "implementationId": "json",
+          "enabled": true
+        },
+        {
+          "id": "aura-json",
+          "extensionId": "aura-builtin",
+          "kind": "document-type",
+          "implementationId": "aura-json",
+          "enabled": true
+        },
+        {
+          "id": "imp-graph",
+          "extensionId": "aura-builtin",
+          "kind": "document-type",
+          "implementationId": "imp-graph",
+          "enabled": true
+        },
+        {
+          "id": "graph-dag",
+          "extensionId": "aura-builtin",
+          "kind": "view",
+          "implementationId": "graph-dag",
+          "roles": ["imp-graph"],
+          "enabled": true
         }
       ]
     }"#;
@@ -98,8 +127,38 @@ fn disabled_command_is_ignored() {
 
 #[test]
 fn missing_view_role_shows_placeholder() {
-    let mut app =
-        App::with_extensions(ExtensionRuntime::empty(), Bindings::empty());
+    let json = r#"{
+      "version": 1,
+      "extensions": [{ "id": "aura-builtin", "enabled": true }],
+      "components": [
+        {
+          "id": "json",
+          "extensionId": "aura-builtin",
+          "kind": "document-type",
+          "implementationId": "json",
+          "enabled": true
+        },
+        {
+          "id": "aura-json",
+          "extensionId": "aura-builtin",
+          "kind": "document-type",
+          "implementationId": "aura-json",
+          "enabled": true
+        },
+        {
+          "id": "imp-graph",
+          "extensionId": "aura-builtin",
+          "kind": "document-type",
+          "implementationId": "imp-graph",
+          "enabled": true
+        }
+      ]
+    }"#;
+    let extensions = ExtensionRuntime::load_from_json(
+        json,
+        aura_editor::register_linked_extensions,
+    );
+    let mut app = App::with_extensions(extensions, Bindings::empty());
     let _ = app.update(Message::OpenPath(fixture("sine.json")));
     assert_eq!(app.documents().documents().len(), 1);
 
@@ -107,4 +166,55 @@ fn missing_view_role_shows_placeholder() {
     assert!(ui
         .find("No enabled view for role `imp-graph`")
         .is_ok());
+}
+
+#[test]
+fn view_falls_back_to_json_role_when_graph_view_missing() {
+    let json = r#"{
+      "version": 1,
+      "extensions": [{ "id": "aura-builtin", "enabled": true }],
+      "components": [
+        {
+          "id": "json",
+          "extensionId": "aura-builtin",
+          "kind": "document-type",
+          "implementationId": "json",
+          "enabled": true
+        },
+        {
+          "id": "aura-json",
+          "extensionId": "aura-builtin",
+          "kind": "document-type",
+          "implementationId": "aura-json",
+          "enabled": true
+        },
+        {
+          "id": "imp-graph",
+          "extensionId": "aura-builtin",
+          "kind": "document-type",
+          "implementationId": "imp-graph",
+          "enabled": true
+        },
+        {
+          "id": "json-fallback",
+          "extensionId": "aura-builtin",
+          "kind": "view",
+          "implementationId": "graph-dag",
+          "roles": ["json"],
+          "enabled": true
+        }
+      ]
+    }"#;
+    let extensions = ExtensionRuntime::load_from_json(
+        json,
+        aura_editor::register_linked_extensions,
+    );
+    let mut app = App::with_extensions(extensions, Bindings::empty());
+    let _ = app.update(Message::OpenPath(fixture("sine.json")));
+    let doc = app.documents().active_document().expect("opened");
+    assert_eq!(
+        app.extensions().resolve_view_for_chain(&doc.roles),
+        Some(("json", "graph-dag")),
+        "tip role imp-graph has no view; fallback should use json"
+    );
 }

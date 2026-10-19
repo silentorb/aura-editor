@@ -37,20 +37,23 @@ Declarative requirements for Aura Editor extensions. Motivation: [`../scoping/ex
 ### `view`
 
 - A view component declares `roles` (document roles it can present). When omitted, hosts may default `roles` to `[component.id]`.
-- The host content pane resolves a document’s view through the view registry by role.
-- v1 open path still loads Imp single-graph files in the host; those documents use the role `imp-graph`. The builtin `graph-dag` view claims that role.
+- The host content pane resolves a document’s view by walking the open document’s type chain from tip to root and taking the first declared role that has an enabled view.
+- Imp single-graph tips use role `imp-graph`. The builtin `graph-dag` view claims that role. Role `json` is reserved for a future generic JSON fallback view.
 - Iced `Element` construction may live in a host adapter so `aura_interfaces` does not depend on application `Message` types. View packages may still depend on Iced for their own widgets.
-- When no enabled view implements a required role, the host shows an explicit error placeholder (not a panic).
+- When no enabled view implements any role on the chain, the host shows an explicit error placeholder (not a panic).
+- When multiple views claim the same role, the first enabled config claim wins.
 
-### `document-type` (deferred)
+### `document-type`
 
-- Future kind: match/open/load for a resource kind.
-- Intended open pipeline: path/bytes → document-type → session document → default view by role (config arbitrates when multiple views claim a role).
-- Not implemented in the v1 runtime; Imp-only open remains host hardwired until this kind lands.
+- Document types are **stackable**: each has an optional parent id. Roots match raw file bytes; children refine a parent payload.
+- Open pipeline: path/bytes → stacked document-types → session document (full chain + tip payload) → view by role (tip first, then parents).
+- Builtin stack for graphs: `json` → `aura-json` → `imp-graph` (success) or `imp-graph-library` (open rejects; no session tab).
+- **Aura JSON:** a JSON object with root string property `type`. After `aura-json` opens, the host selects the child whose implementation id equals that `type` value (no sibling sniffing).
+- Payload between layers is type-erased (`Any`); Imp `Graph` deserialization lives in the `imp-graph` implementation.
 
 ## Builtin extension
 
-- Package id `aura-builtin` provides the initial command and `graph-dag` view components.
+- Package id `aura-builtin` provides commands, stackable document types (`json`, `aura-json`, `imp-graph`, `imp-graph-library`), and the `graph-dag` view.
 - It is linked into the editor binary and enabled in the bundled default config.
 
 ## Non-goals / avoided approaches
@@ -60,14 +63,14 @@ Declarative requirements for Aura Editor extensions. Motivation: [`../scoping/ex
 - Extension config UI or remote marketplace in v1
 - Encoding kind in component ids (no `.command` / `.view` suffixes)
 - Pulling editor GUI or extension loading into aura-engine
-- Implementing `document-type` in the v1 skeleton
+- A separate `content-type` kind (generality comes from document-type stacking)
+- Opening GraphLibrary catalogs as session documents until that flow is designed
 
 ## Later
 
-1. **`document-type` kind** — match/open/load traits; retire hardwired Imp-only open; GraphLibrary as a second type.
-2. **Open pipeline** — path/bytes → document-type → session document → default view by role.
-3. **Richer MDI** — multiple views per document, splits/panels, inactive-tab keep-alive, session restore.
-4. **More extensions** — additional views/commands as separate crates linked into the binary.
-5. **Project-level `extensions.json`** — load from a content/project root, not only bundled defaults.
-6. **Engine-facing kinds** (if ever) — live in engine or a shared interfaces package; do not pull GUI into aura-engine.
-7. **Dynamic loading** — only if compile-time link becomes insufficient; packaging decision, not the v1 contract.
+1. **Richer MDI** — multiple views per document, splits/panels, inactive-tab keep-alive, session restore.
+2. **More extensions** — additional views/commands/document types as separate crates linked into the binary.
+3. **JSON fallback view** — enable a view for role `json` when a more specific view is missing.
+4. **Project-level `extensions.json`** — load from a content/project root, not only bundled defaults.
+5. **Engine-facing kinds** (if ever) — live in engine or a shared interfaces package; do not pull GUI into aura-engine.
+6. **Dynamic loading** — only if compile-time link becomes insufficient; packaging decision, not the v1 contract.

@@ -19,7 +19,7 @@ A better model (inspired by [Tome’s extension system](https://github.com/silen
 
 - **`command`** — bindable editor actions identified by stable string ids (toolbar, keyboard bindings, tests).
 - **`view`** — MDI content presenters; a registry maps document roles to views that can show them.
-- **`document-type`** — intended later: match/open/load for resource kinds; open flow becomes detect type → session document → default view by role.
+- **`document-type`** — stackable match/open refinements (e.g. `json` → `aura-json` → `imp-graph`); open flow builds a type chain, then picks a view from tip role toward parents.
 
 ## Rust loading (v1)
 
@@ -27,6 +27,6 @@ Tome loads extension modules with Bun dynamic `import()`. Rust has no equivalent
 
 ## Boundaries
 
-The extension system for views, commands, and (later) document types lives in **aura-editor**. **aura-engine** remains headless Imp render; engine-facing kinds, if ever needed, must not pull GUI into the engine.
+The extension system for views, commands, and document types lives in **aura-editor**. **aura-engine** remains headless Imp render; engine-facing kinds, if ever needed, must not pull GUI into the engine.
 
 Refined requirements: [`../design/extensions.md`](../design/extensions.md).

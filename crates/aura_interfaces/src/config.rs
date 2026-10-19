@@ -70,6 +70,8 @@ pub enum ComponentKind {
     Command,
     /// Document content view.
     View,
+    /// Stackable document open/refine type.
+    DocumentType,
 }
 
 fn default_true() -> bool {
@@ -139,6 +141,25 @@ mod tests {
         .unwrap();
         assert_eq!(config.extensions.len(), 1);
         assert_eq!(config.components[0].kind, ComponentKind::Command);
+    }
+
+    #[test]
+    fn parses_document_type_kind() {
+        let config = parse_extensions_json(
+            r#"{
+              "version": 1,
+              "extensions": [{ "id": "aura-builtin", "enabled": true }],
+              "components": [{
+                "id": "json",
+                "extensionId": "aura-builtin",
+                "kind": "document-type",
+                "implementationId": "json",
+                "enabled": true
+              }]
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(config.components[0].kind, ComponentKind::DocumentType);
     }
 
     #[test]

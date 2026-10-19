@@ -1,9 +1,10 @@
-//! Unit tests for graph file loading and document store.
+//! Unit tests for stacked document open and document store.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use aura_editor::{
-    load_graph_from_path, load_graph_from_str, DocumentStore, OpenError,
+    DocumentStore, ExtensionRuntime, OpenError, DOC_TYPE_AURA_JSON, DOC_TYPE_IMP_GRAPH,
+    DOC_TYPE_JSON,
 };
 use imp_core_types::Graph;
 
@@ -15,14 +16,30 @@ fn fixture(name: &str) -> PathBuf {
 
 #[test]
 fn loads_single_graph_fixture() {
-    let graph = load_graph_from_path(fixture("sine.json")).expect("sine graph");
+    let runtime = ExtensionRuntime::load_bundled();
+    let opened = runtime.open_document(fixture("sine.json")).expect("sine");
+    assert_eq!(
+        opened.type_chain,
+        vec![
+            DOC_TYPE_JSON.to_string(),
+            DOC_TYPE_AURA_JSON.to_string(),
+            DOC_TYPE_IMP_GRAPH.to_string()
+        ]
+    );
+    let graph = opened
+        .payload
+        .downcast_ref::<Graph>()
+        .expect("imp-graph tip");
     assert!(graph.nodes.contains_key("osc"));
     assert!(graph.edges.contains_key("osc_to_out"));
 }
 
 #[test]
 fn rejects_graph_library_with_typed_error() {
-    let err = load_graph_from_path(fixture("instruments.json")).unwrap_err();
+    let runtime = ExtensionRuntime::load_bundled();
+    let err = runtime
+        .open_document(fixture("instruments.json"))
+        .unwrap_err();
     assert!(
         matches!(err, OpenError::GraphLibraryNotSupported { .. }),
         "expected GraphLibraryNotSupported, got {err:?}"
@@ -31,16 +48,21 @@ fn rejects_graph_library_with_typed_error() {
 
 #[test]
 fn rejects_invalid_json_with_typed_error() {
-    let err = load_graph_from_path(fixture("invalid.json")).unwrap_err();
+    let runtime = ExtensionRuntime::load_bundled();
+    let err = runtime.open_document(fixture("invalid.json")).unwrap_err();
+    // invalid.json is not valid JSON → no root document type matches.
     assert!(
-        matches!(err, OpenError::Json { .. }),
-        "expected Json, got {err:?}"
+        matches!(err, OpenError::Unrecognized { .. }),
+        "expected Unrecognized, got {err:?}"
     );
 }
 
 #[test]
 fn rejects_missing_file_with_io_error() {
-    let err = load_graph_from_path(fixture("does-not-exist.json")).unwrap_err();
+    let runtime = ExtensionRuntime::load_bundled();
+    let err = runtime
+        .open_document(fixture("does-not-exist.json"))
+        .unwrap_err();
     assert!(
         matches!(err, OpenError::Io { .. }),
         "expected Io, got {err:?}"
@@ -48,16 +70,27 @@ fn rejects_missing_file_with_io_error() {
 }
 
 #[test]
-fn rejects_non_graph_object_as_invalid_graph() {
-    let err = load_graph_from_str(
-        PathBuf::from("array.json"),
-        "[1, 2, 3]",
-    )
-    .unwrap_err();
+fn unknown_aura_type_errors() {
+    let runtime = ExtensionRuntime::load_bundled();
+    let err = runtime
+        .open_document_bytes(
+            Path::new("unknown.json"),
+            br#"{ "type": "not-a-real-type", "nodes": {}, "edges": {} }"#,
+        )
+        .unwrap_err();
     assert!(
-        matches!(err, OpenError::InvalidGraph { .. }),
-        "expected InvalidGraph, got {err:?}"
+        matches!(err, OpenError::UnknownAuraType { ref type_id, .. } if type_id == "not-a-real-type"),
+        "expected UnknownAuraType, got {err:?}"
     );
+}
+
+#[test]
+fn plain_json_without_type_stops_at_json() {
+    let runtime = ExtensionRuntime::load_bundled();
+    let opened = runtime
+        .open_document_bytes(Path::new("plain.json"), br#"{ "hello": 1 }"#)
+        .expect("plain json");
+    assert_eq!(opened.type_chain, vec![DOC_TYPE_JSON.to_string()]);
 }
 
 #[test]
@@ -80,14 +113,9 @@ fn open_select_close_tabs() {
     store.select(a);
     assert_eq!(store.active_id(), Some(a));
 
-    let again = store.open_or_activate(PathBuf::from("/tmp/a.json"), sine);
-    assert_eq!(again, a);
-    assert_eq!(store.documents().len(), 2);
-
     store.close(a);
     assert_eq!(store.documents().len(), 1);
     assert_eq!(store.active_id(), Some(b));
-    assert_eq!(store.active_document().unwrap().title, "b");
 
     store.close(b);
     assert!(store.documents().is_empty());

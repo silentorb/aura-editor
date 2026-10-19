@@ -1,4 +1,5 @@
 {
+  "type": "imp-graph-library",
   "id": "aura.test-instruments",
   "definitions": [
     {

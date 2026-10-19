@@ -1,4 +1,5 @@
 {
+  "type": "imp-graph",
   "nodes": {
     "time": {
       "id": "time",
@@ -25,16 +26,34 @@
   },
   "edges": {
     "freq_to_osc": {
-      "from": { "node": "freq", "port": "value" },
-      "to": { "node": "osc", "port": "frequency" }
+      "from": {
+        "node": "freq",
+        "port": "value"
+      },
+      "to": {
+        "node": "osc",
+        "port": "frequency"
+      }
     },
     "time_to_osc": {
-      "from": { "node": "time", "port": "time" },
-      "to": { "node": "osc", "port": "time" }
+      "from": {
+        "node": "time",
+        "port": "time"
+      },
+      "to": {
+        "node": "osc",
+        "port": "time"
+      }
     },
     "osc_to_out": {
-      "from": { "node": "osc", "port": "audio" },
-      "to": { "node": "out", "port": "value" }
+      "from": {
+        "node": "osc",
+        "port": "audio"
+      },
+      "to": {
+        "node": "out",
+        "port": "value"
+      }
     }
   }
 }

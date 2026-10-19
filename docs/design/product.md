@@ -18,17 +18,18 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 ## Documents and MDI
 
 - The editor is a multi-document interface: multiple graph documents may be open in separate tabs.
-- Users can open a single-graph Imp JSON file (`{ nodes, edges }`), switch tabs, and close documents.
+- Users can open a single-graph Aura JSON Imp file (`type: "imp-graph"` plus `nodes` / `edges`), switch tabs, and close documents.
 - Opening a path that is already open activates that tab (no duplicate).
-- An open document holds the parsed Imp `Graph` in memory.
-- The document content pane resolves a **view** from the extension registry by document role (`imp-graph` for Imp single-graph documents). The builtin `graph-dag` view shows an automatic DAG (nodes, ids/types, and edges) with pan and zoom.
+- An open document stores its document-type chain and tip payload (Imp `Graph` for `imp-graph`).
+- The document content pane resolves a **view** by walking the type chain from tip to root and using the first role with an enabled view (`imp-graph` → builtin `graph-dag` today).
 - Open is read-only for now: creating, modifying, and saving documents are out of scope until designed.
-- Extensibility (commands, views, and later document types) follows [`extensions.md`](extensions.md).
+- Extensibility (commands, views, and document types) follows [`extensions.md`](extensions.md).
 
 ## Graph files
 
-- Supported open format today: a single Imp graph object (`nodes` + `edges`).
-- Imp **GraphLibrary** files (`id` + `definitions` with embedded `body` graphs) are not opened yet; attempting to open one must fail with a distinct, typed error.
+- Aura JSON documents declare a root string **`type`** naming the document-type id.
+- Supported open format today: Aura JSON with `type: "imp-graph"` and a single Imp graph object (`nodes` + `edges`).
+- Imp **GraphLibrary** Aura JSON (`type: "imp-graph-library"`, plus `id` + `definitions`) is recognized then rejected with a distinct, typed error (no session tab) until catalog open is designed.
 - File open uses a native dialog; tests and tooling may open by path without a dialog.
 
 ## Graph visualization

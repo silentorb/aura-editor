@@ -1,12 +1,16 @@
-//! Builtin Aura Editor extension: document commands and the graph-dag view.
+//! Builtin Aura Editor extension: document commands, document types, and the graph-dag view.
+
+mod document_types;
 
 use aura_interfaces::{
-    CommandDescriptor, CommandHost, ViewDescriptor, ViewHost, CMD_DOCUMENT_CLOSE_ACTIVE,
-    CMD_DOCUMENT_OPEN, ROLE_IMP_GRAPH, VIEW_GRAPH_DAG,
+    CommandDescriptor, CommandHost, DocumentTypeHost, ViewDescriptor, ViewHost,
+    CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_OPEN, ROLE_IMP_GRAPH, VIEW_GRAPH_DAG,
 };
 
-/// Registers builtin command and view implementations with the host.
-pub fn register(host: &mut (impl CommandHost + ViewHost)) {
+use crate::document_types::register_document_types;
+
+/// Registers builtin command, view, and document-type implementations with the host.
+pub fn register(host: &mut (impl CommandHost + ViewHost + DocumentTypeHost)) {
     host.register_command(
         CMD_DOCUMENT_OPEN,
         CommandDescriptor::with_label("Open document"),
@@ -19,4 +23,5 @@ pub fn register(host: &mut (impl CommandHost + ViewHost)) {
         VIEW_GRAPH_DAG,
         ViewDescriptor::with_roles([ROLE_IMP_GRAPH]),
     );
+    register_document_types(host);
 }

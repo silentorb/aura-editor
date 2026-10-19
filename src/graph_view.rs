@@ -281,7 +281,7 @@ impl<Message> canvas::Program<Message> for GraphView {
 mod tests {
     use super::*;
     use crate::graph_layout::layout_graph;
-    use crate::load_graph_from_path;
+    use imp_core_types::Graph;
     use std::path::PathBuf;
 
     #[test]
@@ -321,7 +321,8 @@ mod tests {
     fn center_translation_puts_content_center_at_viewport_center() {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/sine.json");
-        let graph = load_graph_from_path(path).unwrap();
+        let text = std::fs::read_to_string(path).expect("read sine fixture");
+        let graph: Graph = serde_json::from_str(&text).expect("parse sine fixture");
         let layout = layout_graph(&graph);
         let viewport = Size::new(800.0, 600.0);
         let translation = center_translation(&layout, viewport, 1.0);

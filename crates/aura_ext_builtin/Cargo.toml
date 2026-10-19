@@ -3,8 +3,10 @@ name = "aura_ext_builtin"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Builtin Aura Editor extension (commands + graph-dag view)"
+description = "Builtin Aura Editor extension (commands + document types + graph-dag view)"
 repository = "https://github.com/silentorb/aura-editor"
 
 [dependencies]
 aura_interfaces = { path = "../aura_interfaces" }
+imp_core_types = { path = "../../../imp-rs/crates/imp_core_types" }
+serde_json = "1"

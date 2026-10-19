@@ -14,11 +14,14 @@ mod logging;
 
 pub use bindings::{user_bindings_path, Bindings, DEFAULT_BINDINGS_JSON};
 pub use command::CommandId;
-pub use document::{DocumentId, DocumentStore, GraphDocument};
-pub use extensions::{
-    register_linked_extensions, ExtensionRuntime, RegistrationHost, DEFAULT_EXTENSIONS_JSON,
+pub use document::{
+    DocumentId, DocumentPayload, DocumentStore, GraphDocument, SessionDocument,
 };
-pub use graph_file::{load_graph_from_path, load_graph_from_str, OpenError};
+pub use extensions::{
+    register_linked_extensions, ExtensionRuntime, RegistrationHost, StackedOpen,
+    DEFAULT_EXTENSIONS_JSON,
+};
+pub use graph_file::OpenError;
 pub use graph_layout::{layout_graph, GraphLayout, LaidOutNode};
 pub use graph_view::{
     center_translation, clamp_scale, pan_by, zoom_at_point, GraphView,
@@ -26,7 +29,8 @@ pub use graph_view::{
 pub use logging::init_logging;
 
 pub use aura_interfaces::{
-    CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_OPEN, ROLE_IMP_GRAPH, VIEW_GRAPH_DAG,
+    CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_OPEN, DOC_TYPE_AURA_JSON, DOC_TYPE_IMP_GRAPH,
+    DOC_TYPE_IMP_GRAPH_LIBRARY, DOC_TYPE_JSON, ROLE_IMP_GRAPH, ROLE_JSON, VIEW_GRAPH_DAG,
 };
 
 use std::path::PathBuf;
@@ -45,7 +49,7 @@ pub struct App {
     last_error: Option<OpenError>,
     /// Resolved input bindings (may be empty).
     bindings: Bindings,
-    /// Extension command/view registries.
+    /// Extension command/view/document-type registries.
     extensions: ExtensionRuntime,
 }
 
@@ -159,10 +163,20 @@ impl App {
     pub fn update(&mut self, message: Message) -> Task<Message> {
         match message {
             Message::OpenClicked => return pick_graph_file(),
-            Message::OpenPath(path) => match load_graph_from_path(&path) {
-                Ok(graph) => {
+            Message::OpenPath(path) => match self.extensions.open_document(&path) {
+                Ok(opened) => {
                     self.last_error = None;
-                    self.documents.open_or_activate(path, graph);
+                    let path_for_error = path.clone();
+                    if self
+                        .documents
+                        .open_or_activate_stacked(path, opened)
+                        .is_none()
+                    {
+                        self.last_error = Some(OpenError::Invalid {
+                            path: path_for_error,
+                            reason: String::from("unsupported tip document payload"),
+                        });
+                    }
                 }
                 Err(error) => {
                     self.last_error = Some(error);
@@ -244,14 +258,29 @@ impl App {
     fn document_panel(&self) -> Element<'_, Message> {
         let content: Element<'_, Message> = if let Some(doc) = self.documents.active_document()
         {
-            match self.extensions.view_for_role(ROLE_IMP_GRAPH) {
-                Some(VIEW_GRAPH_DAG) => graph_canvas(doc.id, &doc.graph),
-                Some(other) => view_error_placeholder(format!(
-                    "No host adapter for view `{other}` (role `{ROLE_IMP_GRAPH}`)"
+            match self.extensions.resolve_view_for_chain(&doc.roles) {
+                Some((role, VIEW_GRAPH_DAG)) => match doc.payload.graph() {
+                    Some(graph) => graph_canvas(doc.id, graph),
+                    None => view_error_placeholder(format!(
+                        "View `{VIEW_GRAPH_DAG}` requires an Imp graph tip (role `{role}`)"
+                    )),
+                },
+                Some((role, other)) => view_error_placeholder(format!(
+                    "No host adapter for view `{other}` (role `{role}`)"
                 )),
-                None => view_error_placeholder(format!(
-                    "No enabled view for role `{ROLE_IMP_GRAPH}`"
-                )),
+                None => {
+                    let hint = doc
+                        .roles
+                        .iter()
+                        .rev()
+                        .flatten()
+                        .next()
+                        .map(|role| format!("No enabled view for role `{role}`"))
+                        .unwrap_or_else(|| {
+                            String::from("No enabled view for this document type chain")
+                        });
+                    view_error_placeholder(hint)
+                }
             }
         } else {
             container(text("Open a graph file to begin"))

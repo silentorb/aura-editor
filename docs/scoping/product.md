@@ -25,7 +25,7 @@ Refined requirements live in [`../design/product.md`](../design/product.md), [`.
 
 ## Graphs and files
 
-Single-graph Imp files (`{ nodes, edges }`) are the first document type users open. Multi-graph catalogs use Imp **GraphLibrary** (`definitions[].body`); opening those from the editor comes later.
+Aura JSON files declare a root `type` and stack through document types (`json` → `aura-json` → …). Single-graph Imp files (`type: "imp-graph"` plus `nodes` / `edges`) are the first tip users open successfully. Multi-graph catalogs (`type: "imp-graph-library"`) are recognized then rejected until catalog open is designed.
 
 Open documents show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Node layout is automatic only — no freeform dragging of nodes on a canvas.
 

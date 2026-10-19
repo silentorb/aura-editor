@@ -321,6 +321,8 @@ name = "aura_ext_builtin"
 version = "0.1.0"
 dependencies = [
  "aura_interfaces",
+ "imp_core_types",
+ "serde_json",
 ]
 
 [[package]]
