@@ -64,6 +64,16 @@
       "implementationId": "imp-graph-library",
       "enabled": true,
       "params": {}
+    },
+    {
+      "id": "open-documents",
+      "extensionId": "aura-builtin",
+      "kind": "user-state",
+      "implementationId": "open-documents",
+      "enabled": true,
+      "params": {
+        "bucket": "documents"
+      }
     }
   ]
 }

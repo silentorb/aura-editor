@@ -11,6 +11,7 @@ mod graph_file;
 mod graph_layout;
 mod graph_view;
 mod logging;
+mod user_state;
 
 pub use bindings::{user_bindings_path, Bindings, DEFAULT_BINDINGS_JSON};
 pub use command::CommandId;
@@ -18,7 +19,7 @@ pub use document::{
     DocumentId, DocumentPayload, DocumentStore, GraphDocument, SessionDocument,
 };
 pub use extensions::{
-    register_linked_extensions, ExtensionRuntime, RegistrationHost, StackedOpen,
+    register_linked_extensions, ExtensionRuntime, RegistrationHost, StackedOpen, UserStateBinding,
     DEFAULT_EXTENSIONS_JSON,
 };
 pub use graph_file::OpenError;
@@ -27,10 +28,15 @@ pub use graph_view::{
     center_translation, clamp_scale, pan_by, zoom_at_point, GraphView,
 };
 pub use logging::init_logging;
+pub use user_state::{
+    write_atomic, OpenDocumentsEntry, UserDir, UserStateError, UserStateStore, BUCKET_SCHEMA_VERSION,
+    DEBOUNCE, DEFAULT_USER_DIR_NAME, USER_DIR_ENV,
+};
 
 pub use aura_interfaces::{
     CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_OPEN, DOC_TYPE_AURA_JSON, DOC_TYPE_IMP_GRAPH,
-    DOC_TYPE_IMP_GRAPH_LIBRARY, DOC_TYPE_JSON, ROLE_IMP_GRAPH, ROLE_JSON, VIEW_GRAPH_DAG,
+    DOC_TYPE_IMP_GRAPH_LIBRARY, DOC_TYPE_JSON, ROLE_IMP_GRAPH, ROLE_JSON,
+    USER_STATE_BUCKET_DOCUMENTS, USER_STATE_OPEN_DOCUMENTS, VIEW_GRAPH_DAG,
 };
 
 use std::path::PathBuf;
@@ -38,6 +44,7 @@ use std::path::PathBuf;
 use iced::keyboard::{self, Key, Modifiers};
 use iced::widget::{button, column, container, row, text, Space};
 use iced::{Element, Fill, Subscription, Task};
+use tracing::warn;
 
 use crate::graph_view::graph_canvas;
 
@@ -51,6 +58,8 @@ pub struct App {
     bindings: Bindings,
     /// Extension command/view/document-type registries.
     extensions: ExtensionRuntime,
+    /// Bucketed ephemeral user state.
+    user_state: UserStateStore,
 }
 
 /// Messages produced by the multi-document shell.
@@ -75,6 +84,11 @@ pub enum Message {
     },
     /// Run a bindable command (from bindings or tests).
     Command(CommandId),
+    /// Debounced flush of dirty user-state buckets.
+    FlushUserState {
+        /// Generation token from the mutating update that scheduled this flush.
+        generation: u64,
+    },
 }
 
 impl Default for App {
@@ -85,24 +99,63 @@ impl Default for App {
 
 impl App {
     /// Creates the initial application state with bundled extensions and bindings.
+    ///
+    /// Loads user-state buckets from the resolved Aura user directory and restores
+    /// open documents when the `open-documents` entry is present.
     pub fn new() -> Self {
         let extensions = ExtensionRuntime::load_bundled();
         let bindings = Bindings::load(extensions.command_ids());
-        Self::with_extensions(extensions, bindings)
+        Self::with_user_dir(UserDir::resolve(), extensions, bindings)
     }
 
     /// Creates an app with bundled extensions and an explicit bindings table.
+    ///
+    /// Uses an in-memory user-state store (no disk I/O); preferred by unit tests.
     pub fn with_bindings(bindings: Bindings) -> Self {
         Self::with_extensions(ExtensionRuntime::load_bundled(), bindings)
     }
 
     /// Creates an app with explicit extension registries and bindings (tests).
+    ///
+    /// Uses an in-memory user-state store (no disk I/O).
     pub fn with_extensions(extensions: ExtensionRuntime, bindings: Bindings) -> Self {
         Self {
             documents: DocumentStore::default(),
             last_error: None,
             bindings,
             extensions,
+            user_state: UserStateStore::in_memory(),
+        }
+    }
+
+    /// Creates an app that loads and persists user state under `user_dir`.
+    pub fn with_user_dir(
+        user_dir: UserDir,
+        extensions: ExtensionRuntime,
+        bindings: Bindings,
+    ) -> Self {
+        let mut user_state = UserStateStore::open(user_dir);
+        user_state.load_registered(extensions.user_state_bindings());
+        let mut app = Self {
+            documents: DocumentStore::default(),
+            last_error: None,
+            bindings,
+            extensions,
+            user_state,
+        };
+        app.restore_open_documents();
+        app
+    }
+
+    /// Bucketed user-state store.
+    pub fn user_state(&self) -> &UserStateStore {
+        &self.user_state
+    }
+
+    /// Writes dirty user-state buckets immediately (tests and shutdown hooks).
+    pub fn flush_user_state_now(&mut self) {
+        if let Err(error) = self.user_state.flush_now() {
+            warn!(%error, "failed to flush user state");
         }
     }
 
@@ -176,7 +229,9 @@ impl App {
                             path: path_for_error,
                             reason: String::from("unsupported tip document payload"),
                         });
+                        return Task::none();
                     }
+                    return self.sync_open_documents_task();
                 }
                 Err(error) => {
                     self.last_error = Some(error);
@@ -188,9 +243,11 @@ impl App {
             Message::OpenCancelled => {}
             Message::SelectTab(id) => {
                 self.documents.select(id);
+                return self.sync_open_documents_task();
             }
             Message::CloseTab(id) => {
                 self.documents.close(id);
+                return self.sync_open_documents_task();
             }
             Message::KeyInput { key, modifiers } => {
                 if let Some(command) = self.bindings.resolve(&key, modifiers) {
@@ -206,13 +263,110 @@ impl App {
                     CMD_DOCUMENT_CLOSE_ACTIVE => {
                         if let Some(id) = self.documents.active_id() {
                             self.documents.close(id);
+                            return self.sync_open_documents_task();
                         }
                     }
                     _ => {}
                 }
             }
+            Message::FlushUserState { generation } => {
+                if let Err(error) = self.user_state.flush_if_generation(generation) {
+                    warn!(%error, "failed to flush user state");
+                }
+            }
         }
         Task::none()
+    }
+
+    fn open_documents_binding(&self) -> Option<&UserStateBinding> {
+        self.extensions
+            .user_state_bindings()
+            .iter()
+            .find(|binding| binding.entry_id == USER_STATE_OPEN_DOCUMENTS)
+    }
+
+    fn restore_open_documents(&mut self) {
+        let Some(binding) = self.open_documents_binding().cloned() else {
+            return;
+        };
+        let Some(entry) = self
+            .user_state
+            .get_entry::<OpenDocumentsEntry>(&binding.bucket, &binding.entry_id)
+        else {
+            return;
+        };
+
+        for path in entry.open_paths {
+            match self.extensions.open_document(&path) {
+                Ok(opened) => {
+                    if self
+                        .documents
+                        .open_or_activate_stacked(path.clone(), opened)
+                        .is_none()
+                    {
+                        warn!(
+                            path = %path.display(),
+                            "skipped restoring document; unsupported tip payload"
+                        );
+                    }
+                }
+                Err(error) => {
+                    warn!(
+                        path = %path.display(),
+                        %error,
+                        "skipped restoring document"
+                    );
+                }
+            }
+        }
+
+        if let Some(active_path) = entry.active_path {
+            if let Some(doc) = self.documents.find_by_path(&active_path) {
+                let id = doc.id;
+                self.documents.select(id);
+            }
+        }
+    }
+
+    fn sync_open_documents_task(&mut self) -> Task<Message> {
+        let Some(binding) = self.open_documents_binding().cloned() else {
+            return Task::none();
+        };
+        let entry = OpenDocumentsEntry {
+            open_paths: self
+                .documents
+                .documents()
+                .iter()
+                .map(|doc| doc.path.clone())
+                .collect(),
+            active_path: self
+                .documents
+                .active_document()
+                .map(|doc| doc.path.clone()),
+        };
+        let generation = match self
+            .user_state
+            .set_entry(&binding.bucket, &binding.entry_id, &entry)
+        {
+            Ok(generation) => generation,
+            Err(error) => {
+                warn!(%error, "failed to update open-documents user state");
+                return Task::none();
+            }
+        };
+        self.schedule_user_state_flush(generation)
+    }
+
+    fn schedule_user_state_flush(&self, generation: u64) -> Task<Message> {
+        if !self.user_state.persists_to_disk() {
+            return Task::none();
+        }
+        Task::perform(
+            async move {
+                tokio::time::sleep(DEBOUNCE).await;
+            },
+            move |_| Message::FlushUserState { generation },
+        )
     }
 
     /// Builds the multi-document shell view.

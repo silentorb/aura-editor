@@ -1,5 +1,6 @@
 /target/
 /logs/
+/.aura-user/
 .DS_Store
 *.log
 .env

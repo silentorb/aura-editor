@@ -44,4 +44,8 @@ Declarative requirements for configurable input→command bindings. Motivation: 
 - A bindings settings UI in the current slice
 - Persisting or migrating canvas camera controls through the bindings file yet
 
+## Later
+
+1. **Aura user directory / bucket** — optionally relocate the user bindings file under the Aura user directory or into a user-state bucket (see [`user-state.md`](user-state.md)); keep replace-not-merge load semantics unless redesigned.
+
 Background: [`../scoping/product.md`](../scoping/product.md).

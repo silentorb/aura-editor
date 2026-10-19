@@ -23,7 +23,8 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - An open document stores its document-type chain and tip payload (Imp `Graph` for `imp-graph`).
 - The document content pane resolves a **view** by walking the type chain from tip to root and using the first role with an enabled view (`imp-graph` → builtin `graph-dag` today).
 - Open is read-only for now: creating, modifying, and saving documents are out of scope until designed.
-- Extensibility (commands, views, and document types) follows [`extensions.md`](extensions.md).
+- Open document paths and the active tab are restored from ephemeral user state under the Aura user directory (see [`user-state.md`](user-state.md)); pan/zoom is not.
+- Extensibility (commands, views, document types, and user-state) follows [`extensions.md`](extensions.md).
 
 ## Graph files
 
@@ -75,7 +76,7 @@ Repos and projects use kebab-case. Rust packages use snake_case (`aura_editor`).
 - Embedding workbench orchestration (Compose / Dev Container entrypoint) inside this editor repo
 - Running the aura-engine test suite inside the editor container
 - Freeform manual node placement on a canvas (layout stays automatic)
-- Persisting pan/zoom camera per document across sessions
+- Persisting pan/zoom camera per document across launches
 - Opening GraphLibrary catalogs as editor documents until that flow is designed
 - Creating, editing, or saving graph documents in the current read-only open slice
 - Overriding native OS input commands via the bindings layer

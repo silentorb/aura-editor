@@ -12,12 +12,13 @@ Declarative testing requirements for Aura Editor. Product context: [`product.md`
 
 - Pure application state and `update` logic (unit tests).
 - Bindings JSON parse/load chain, trigger resolve, and command dispatch (unit tests; do not depend on the real user config directory).
+- User-state store load/save with explicit temporary directories: atomic replace, dirty flush, generation coalescing via `flush_now` / `flush_if_generation`, and open-documents restore (unit/integration; do not depend on the real CWD `.aura-user` or `AURA_USER_DIR`).
 - Stable headless UI interactions via Iced’s testing support (`iced_test` Simulator and similar): basic clicks, key events, and presence of labeled controls/text when selectors are reliable.
 - Invariants that do not depend on timing, pixel layout, or audio output.
 
 ## What not to test
 
-- Cases prone to race conditions or flaky timing.
+- Cases prone to race conditions or flaky timing (including waiting on the user-state debounce timer; call `flush_now` instead).
 - Brittle, hacky mock or fake integrations that are hard to keep honest.
 - Deep analysis of visual output (pixel snapshots, layout geometry beyond simple widget presence) or audio output.
 - Input sequences that are difficult to generate and consume reliably.

@@ -72,6 +72,8 @@ pub enum ComponentKind {
     View,
     /// Stackable document open/refine type.
     DocumentType,
+    /// Ephemeral user-state entry persisted in a named bucket.
+    UserState,
 }
 
 fn default_true() -> bool {
@@ -160,6 +162,30 @@ mod tests {
         )
         .unwrap();
         assert_eq!(config.components[0].kind, ComponentKind::DocumentType);
+    }
+
+    #[test]
+    fn parses_user_state_kind() {
+        let config = parse_extensions_json(
+            r#"{
+              "version": 1,
+              "extensions": [{ "id": "aura-builtin", "enabled": true }],
+              "components": [{
+                "id": "open-documents",
+                "extensionId": "aura-builtin",
+                "kind": "user-state",
+                "implementationId": "open-documents",
+                "enabled": true,
+                "params": { "bucket": "documents" }
+              }]
+            }"#,
+        )
+        .unwrap();
+        assert_eq!(config.components[0].kind, ComponentKind::UserState);
+        assert_eq!(
+            config.components[0].params.get("bucket"),
+            Some(&Value::from("documents"))
+        );
     }
 
     #[test]

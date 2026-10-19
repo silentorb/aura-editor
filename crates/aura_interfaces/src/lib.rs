@@ -5,6 +5,7 @@
 mod command;
 mod config;
 mod document_type;
+mod user_state;
 mod view;
 
 pub use command::{CommandDescriptor, CommandHost};
@@ -15,6 +16,7 @@ pub use config::{
 pub use document_type::{
     AuraJsonEnvelope, DocumentOpenError, DocumentType, DocumentTypeHost, OpenSource,
 };
+pub use user_state::{UserStateDescriptor, UserStateHost};
 pub use view::{ViewDescriptor, ViewHost};
 
 /// Root property on Aura JSON objects naming the child document-type id.
@@ -41,3 +43,12 @@ pub const DOC_TYPE_JSON: &str = "json";
 pub const DOC_TYPE_AURA_JSON: &str = "aura-json";
 pub const DOC_TYPE_IMP_GRAPH: &str = "imp-graph";
 pub const DOC_TYPE_IMP_GRAPH_LIBRARY: &str = "imp-graph-library";
+
+/// Builtin user-state entry for open document tabs.
+pub const USER_STATE_OPEN_DOCUMENTS: &str = "open-documents";
+
+/// Domain bucket id for open-documents user state.
+pub const USER_STATE_BUCKET_DOCUMENTS: &str = "documents";
+
+/// Config param key selecting the user-state bucket file id.
+pub const USER_STATE_PARAM_BUCKET: &str = "bucket";

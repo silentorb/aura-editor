@@ -9,7 +9,8 @@ use std::sync::Arc;
 use aura_interfaces::{
     parse_extensions_json, AuraJsonEnvelope, CommandDescriptor, CommandHost, ComponentKind,
     DocumentOpenError, DocumentType, DocumentTypeHost, ExtensionConfig, ExtensionsConfig,
-    OpenSource, ViewDescriptor, ViewHost, DOC_TYPE_AURA_JSON,
+    OpenSource, UserStateDescriptor, UserStateHost, ViewDescriptor, ViewHost, DOC_TYPE_AURA_JSON,
+    USER_STATE_PARAM_BUCKET,
 };
 use tracing::{info, warn};
 
@@ -28,7 +29,16 @@ pub struct StackedOpen {
     pub payload: Box<dyn Any + Send + Sync>,
 }
 
-/// Resolved command, view, and document-type registries after config + registration.
+/// One enabled user-state entry and the bucket file it belongs to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserStateBinding {
+    /// Component / entry id inside the bucket document.
+    pub entry_id: String,
+    /// Bucket file id (without `.json`).
+    pub bucket: String,
+}
+
+/// Resolved command, view, document-type, and user-state registries after config + registration.
 #[derive(Clone, Default)]
 pub struct ExtensionRuntime {
     commands: HashSet<String>,
@@ -42,6 +52,8 @@ pub struct ExtensionRuntime {
     root_document_types: Vec<String>,
     /// parent id → child implementation ids in config order.
     document_type_children: HashMap<String, Vec<String>>,
+    /// Enabled user-state entries in config order.
+    user_state: Vec<UserStateBinding>,
 }
 
 impl std::fmt::Debug for ExtensionRuntime {
@@ -56,6 +68,7 @@ impl std::fmt::Debug for ExtensionRuntime {
             )
             .field("root_document_types", &self.root_document_types)
             .field("document_type_children", &self.document_type_children)
+            .field("user_state", &self.user_state)
             .finish()
     }
 }
@@ -67,6 +80,7 @@ impl PartialEq for ExtensionRuntime {
             && self.view_implementations == other.view_implementations
             && self.root_document_types == other.root_document_types
             && self.document_type_children == other.document_type_children
+            && self.user_state == other.user_state
             && self.document_types.keys().collect::<HashSet<_>>()
                 == other.document_types.keys().collect::<HashSet<_>>()
     }
@@ -113,6 +127,7 @@ impl ExtensionRuntime {
             views = runtime.view_implementations.len(),
             roles = runtime.views_by_role.len(),
             document_types = runtime.document_types.len(),
+            user_state = runtime.user_state.len(),
             "extension registries ready"
         );
         runtime
@@ -141,6 +156,16 @@ impl ExtensionRuntime {
     /// Whether a document type implementation is enabled.
     pub fn has_document_type(&self, implementation_id: &str) -> bool {
         self.document_types.contains_key(implementation_id)
+    }
+
+    /// Enabled user-state entry bindings (component id + bucket).
+    pub fn user_state_bindings(&self) -> &[UserStateBinding] {
+        &self.user_state
+    }
+
+    /// Whether a user-state entry id is enabled.
+    pub fn has_user_state(&self, entry_id: &str) -> bool {
+        self.user_state.iter().any(|binding| binding.entry_id == entry_id)
     }
 
     /// Read `path` and resolve the stacked document-type chain.
@@ -251,6 +276,7 @@ pub struct RegistrationHost {
     offered_commands: HashMap<String, CommandDescriptor>,
     offered_views: HashMap<String, ViewDescriptor>,
     offered_document_types: HashMap<String, Arc<dyn DocumentType>>,
+    offered_user_state: HashMap<String, UserStateDescriptor>,
 }
 
 impl std::fmt::Debug for RegistrationHost {
@@ -263,6 +289,7 @@ impl std::fmt::Debug for RegistrationHost {
                 "offered_document_types",
                 &self.offered_document_types.keys().collect::<Vec<_>>(),
             )
+            .field("offered_user_state", &self.offered_user_state)
             .finish()
     }
 }
@@ -274,6 +301,7 @@ impl RegistrationHost {
             offered_commands: HashMap::new(),
             offered_views: HashMap::new(),
             offered_document_types: HashMap::new(),
+            offered_user_state: HashMap::new(),
         }
     }
 
@@ -288,8 +316,10 @@ impl RegistrationHost {
         let mut document_types = HashMap::new();
         let mut root_document_types = Vec::new();
         let mut document_type_children: HashMap<String, Vec<String>> = HashMap::new();
+        let mut user_state = Vec::new();
         let mut seen_roots = HashSet::new();
         let mut seen_children: HashMap<String, HashSet<String>> = HashMap::new();
+        let mut seen_user_state = HashSet::new();
 
         for component in &self.config.components {
             if !component.enabled {
@@ -379,6 +409,42 @@ impl RegistrationHost {
                         }
                     }
                 }
+                ComponentKind::UserState => {
+                    if !self
+                        .offered_user_state
+                        .contains_key(&component.implementation_id)
+                    {
+                        warn!(
+                            component = %component.id,
+                            implementation = %component.implementation_id,
+                            "skipping user-state; implementation not registered by a linked extension"
+                        );
+                        continue;
+                    }
+                    let Some(bucket) = component
+                        .params
+                        .get(USER_STATE_PARAM_BUCKET)
+                        .and_then(|value| value.as_str())
+                        .filter(|bucket| !bucket.is_empty())
+                    else {
+                        warn!(
+                            component = %component.id,
+                            "skipping user-state; params.bucket string is required"
+                        );
+                        continue;
+                    };
+                    if !seen_user_state.insert(component.id.clone()) {
+                        warn!(
+                            component = %component.id,
+                            "skipping duplicate user-state component id"
+                        );
+                        continue;
+                    }
+                    user_state.push(UserStateBinding {
+                        entry_id: component.id.clone(),
+                        bucket: bucket.to_string(),
+                    });
+                }
             }
         }
 
@@ -389,6 +455,7 @@ impl RegistrationHost {
             document_types,
             root_document_types,
             document_type_children,
+            user_state,
         }
     }
 }
@@ -418,6 +485,13 @@ impl DocumentTypeHost for RegistrationHost {
     }
 }
 
+impl UserStateHost for RegistrationHost {
+    fn register_user_state(&mut self, implementation_id: &str, descriptor: UserStateDescriptor) {
+        self.offered_user_state
+            .insert(implementation_id.to_string(), descriptor);
+    }
+}
+
 /// Calls `register` on every compile-time linked extension package.
 pub fn register_linked_extensions(host: &mut RegistrationHost) {
     aura_ext_builtin::register(host);
@@ -430,7 +504,8 @@ mod tests {
 
     use aura_interfaces::{
         CMD_DOCUMENT_OPEN, DOC_TYPE_AURA_JSON, DOC_TYPE_IMP_GRAPH, DOC_TYPE_IMP_GRAPH_LIBRARY,
-        DOC_TYPE_JSON, ROLE_IMP_GRAPH, VIEW_GRAPH_DAG,
+        DOC_TYPE_JSON, ROLE_IMP_GRAPH, USER_STATE_BUCKET_DOCUMENTS, USER_STATE_OPEN_DOCUMENTS,
+        VIEW_GRAPH_DAG,
     };
 
     #[test]
@@ -443,6 +518,14 @@ mod tests {
         assert!(runtime.has_document_type(DOC_TYPE_AURA_JSON));
         assert!(runtime.has_document_type(DOC_TYPE_IMP_GRAPH));
         assert!(runtime.has_document_type(DOC_TYPE_IMP_GRAPH_LIBRARY));
+        assert!(runtime.has_user_state(USER_STATE_OPEN_DOCUMENTS));
+        assert_eq!(
+            runtime.user_state_bindings(),
+            &[UserStateBinding {
+                entry_id: USER_STATE_OPEN_DOCUMENTS.to_string(),
+                bucket: USER_STATE_BUCKET_DOCUMENTS.to_string(),
+            }]
+        );
     }
 
     #[test]

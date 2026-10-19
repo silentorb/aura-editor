@@ -51,9 +51,16 @@ Declarative requirements for Aura Editor extensions. Motivation: [`../scoping/ex
 - **Aura JSON:** a JSON object with root string property `type`. After `aura-json` opens, the host selects the child whose implementation id equals that `type` value (no sibling sniffing).
 - Payload between layers is type-erased (`Any`); Imp `Graph` deserialization lives in the `imp-graph` implementation.
 
+### `user-state`
+
+- User-state components declare ephemeral state entries persisted under the Aura user directory (see [`user-state.md`](user-state.md)).
+- Config requires `params.bucket` (string). The component `id` is the entry key inside that bucket’s JSON document.
+- Linked extensions register implementations; host adapters collect/apply typed values so extension crates do not depend on `aura_editor`.
+- Builtin `open-documents` uses bucket `documents` and persists open tab paths plus the active path.
+
 ## Builtin extension
 
-- Package id `aura-builtin` provides commands, stackable document types (`json`, `aura-json`, `imp-graph`, `imp-graph-library`), and the `graph-dag` view.
+- Package id `aura-builtin` provides commands, stackable document types (`json`, `aura-json`, `imp-graph`, `imp-graph-library`), the `graph-dag` view, and the `open-documents` user-state entry.
 - It is linked into the editor binary and enabled in the bundled default config.
 
 ## Non-goals / avoided approaches
@@ -68,7 +75,7 @@ Declarative requirements for Aura Editor extensions. Motivation: [`../scoping/ex
 
 ## Later
 
-1. **Richer MDI** — multiple views per document, splits/panels, inactive-tab keep-alive, session restore.
+1. **Richer MDI** — multiple views per document, splits/panels, inactive-tab keep-alive; further open-document / layout persistence beyond tab paths.
 2. **More extensions** — additional views/commands/document types as separate crates linked into the binary.
 3. **JSON fallback view** — enable a view for role `json` when a more specific view is missing.
 4. **Project-level `extensions.json`** — load from a content/project root, not only bundled defaults.
