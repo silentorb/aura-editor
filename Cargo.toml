@@ -25,6 +25,7 @@ aura_ext_notation = { path = "crates/aura_ext_notation" }
 aura_interfaces = { path = "crates/aura_interfaces" }
 directories = "6"
 iced = { version = "0.14", features = ["canvas", "tokio"] }
+iced_aw = { version = "0.14", default-features = false, features = ["menu"] }
 tokio = { version = "1", features = ["time"] }
 imp_core_types = { path = "../imp-rs/crates/imp_core_types" }
 petgraph = "0.8"

@@ -5,7 +5,7 @@ Declarative requirements for configurable input→command bindings. Motivation: 
 ## Role
 
 - The editor maps user input to **commands** through a configurable bindings layer.
-- Bindings are the abstraction between input sources and application actions; UI chrome (buttons, menus) may invoke the same commands without going through bindings.
+- Bindings are the abstraction between input sources and application actions; UI chrome (global menus, per-view toolbar buttons) may invoke the same commands without going through bindings.
 - Keyboard shortcuts are the first input source. Additional sources (for example mouse) may be added later using the same command and file model.
 
 ## Persistence

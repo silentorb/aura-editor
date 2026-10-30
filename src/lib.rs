@@ -11,6 +11,7 @@ mod graph_file;
 mod graph_layout;
 mod graph_view;
 mod logging;
+mod menu_bar;
 mod piano_roll;
 mod piano_roll_ui;
 mod user_state;
@@ -77,7 +78,7 @@ pub struct App {
 /// Messages produced by the multi-document shell.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Message {
-    /// User chose Open… from the toolbar.
+    /// User chose Open… (legacy message; menus use [`Message::Command`]).
     OpenClicked,
     /// Open the document at this path (from the dialog or tests).
     OpenPath(PathBuf),
@@ -556,17 +557,9 @@ impl App {
 
     /// Builds the multi-document shell view.
     pub fn view(&self) -> Element<'_, Message> {
-        let mut toolbar = row![
-            button("Open…").on_press(Message::OpenClicked),
-            button("New notation").on_press(Message::Command(CommandId::new(
-                CMD_DOCUMENT_NEW_NOTATION
-            ))),
-            button("Save").on_press(Message::Command(CommandId::new(CMD_DOCUMENT_SAVE))),
-            Space::new().width(12),
-            text(self.status()),
-        ]
-        .spacing(8)
-        .padding(8);
+        let status = row![text(self.status())].padding(8);
+
+        let mut shell = column![menu_bar::global_menu_bar(), status].spacing(0);
 
         if self
             .documents
@@ -574,14 +567,17 @@ impl App {
             .and_then(|doc| doc.payload.notation())
             .is_some()
         {
-            toolbar = toolbar.push(Space::new().width(16));
-            toolbar = toolbar.push(piano_roll_tool_bar(&self.piano_roll_ui));
+            shell = shell.push(
+                row![piano_roll_tool_bar(&self.piano_roll_ui)]
+                    .spacing(6)
+                    .padding([0, 8]),
+            );
         }
 
         let tabs = self.tab_bar();
         let body = self.document_panel();
 
-        column![toolbar, tabs, body].spacing(0).into()
+        shell.push(tabs).push(body).into()
     }
 
     fn tab_bar(&self) -> Element<'_, Message> {

@@ -48,12 +48,19 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Editing nodes/connections later regenerates layout.
 - Port-level connection detail is not required in the initial view (node-level edges are enough).
 
+## Shell chrome
+
+- The shell has a global **menu bar** with File / Edit / View roots.
+- File menu exposes document commands (Open, New notation, Save, Close). Edit and View are reserved for future global actions.
+- **Per-view toolbars** hold view-specific controls (for example the piano-roll tool strip). Menus in this slice are not contextual to the active view.
+- A global application toolbar and per-view contextual menus are deferred.
+
 ## Input bindings
 
 - User input maps to editor **commands** through a configurable bindings layer (keyboard first). See [`input-bindings.md`](input-bindings.md).
 - Commands are extension components registered by stable string id; see [`extensions.md`](extensions.md).
 - Bindings load from an optional user JSON file, else a bundled default, else empty; the app runs without bindings.
-- Toolbar and other UI may invoke the same commands without going through bindings.
+- Menus, toolbars, and other UI may invoke the same commands without going through bindings.
 
 ## Repository boundaries
 

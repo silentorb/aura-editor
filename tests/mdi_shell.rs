@@ -20,7 +20,7 @@ fn empty_state_prompts_to_open() {
     let app = test_app();
     let mut ui = simulator(app.view());
 
-    assert!(ui.find("Open…").is_ok());
+    assert!(ui.find("File").is_ok(), "global File menu root should be visible");
     assert!(ui
         .find("Open a file or create a notation to begin")
         .is_ok());
