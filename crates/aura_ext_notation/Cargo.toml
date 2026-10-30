@@ -1,0 +1,12 @@
+[package]
+name = "aura_ext_notation"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Aura Editor notation document type, piano-roll view registration, and tool commands"
+repository = "https://github.com/silentorb/aura-editor"
+
+[dependencies]
+aura_interfaces = { path = "../aura_interfaces" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

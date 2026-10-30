@@ -15,7 +15,9 @@ It stays in its own repository so **aura-engine** can remain an independent, hea
 - Carry GUI and OS-integration dependencies that the headless engine should not need, while likely sharing most of the engine’s core dependency set
 - Position the product as a music/audio **designer**, distinct from a traditional DAW
 - Treat **Imp graphs** as the primary persistent resources (flat, orthogonal UX), rather than traditional DAW “projects” and supporting resource trees
-- Provide a multi-document interface so users can open multiple graph documents in tabs
+- Spread Aura content across multiple plain-text files (graphs, notation, and later other resources), composed like a programming project rather than crammed into a single binary project file
+- Provide a hand-crafted **piano roll** for notation as a complement to procedural generation—useful when fully procedural authoring is too hard—without making destructive timeline editing the center of the product
+- Provide a multi-document interface so users can open multiple documents (graphs and notation) in tabs
 
 ## Application stack
 
@@ -27,7 +29,9 @@ Refined requirements live in [`../design/product.md`](../design/product.md), [`.
 
 Aura JSON files declare a root `type` and stack through document types (`json` → `aura-json` → …). Single-graph Imp files (`type: "imp-graph"` plus `nodes` / `edges`) are the first tip users open successfully. Multi-graph catalogs (`type: "imp-graph-library"`) are recognized then rejected until catalog open is designed.
 
-Open documents show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Node layout is automatic only — no freeform dragging of nodes on a canvas.
+Hand-crafted notation lives in separate Aura JSON files (`type: "notation"`) with beat-grid note events. Users create, open, and save those documents in a piano-roll view (modal Draw / Select / Erase tools). Playback from that view comes later; the first piano roll is silent.
+
+Open Imp graphs show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Node layout is automatic only — no freeform dragging of nodes on a canvas. Notation documents open into the piano-roll view.
 
 ## Input and commands
 
@@ -37,6 +41,6 @@ Refined requirements: [`../design/input-bindings.md`](../design/input-bindings.m
 
 ## Open questions
 
-- How far hand-crafting of data and configuration goes versus generation and graph-driven workflows
+- How tightly notation wires into Imp graphs / engine `Score` at translate time (literal-score nodes vs editor-owned files lowered later)
 - How tightly the editor couples to aura-engine APIs versus file/CLI boundaries
 - Whether everyday authoring stays 1:1 graph-per-file or also embraces GraphLibrary catalogs as first-class multi-document sources

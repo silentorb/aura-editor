@@ -21,7 +21,9 @@ fn empty_state_prompts_to_open() {
     let mut ui = simulator(app.view());
 
     assert!(ui.find("Open…").is_ok());
-    assert!(ui.find("Open a graph file to begin").is_ok());
+    assert!(ui
+        .find("Open a file or create a notation to begin")
+        .is_ok());
 }
 
 #[test]
@@ -45,7 +47,9 @@ fn open_path_creates_tab_and_close_restores_empty_state() {
     assert!(app.documents().documents().is_empty());
 
     let mut ui = simulator(app.view());
-    assert!(ui.find("Open a graph file to begin").is_ok());
+    assert!(ui
+        .find("Open a file or create a notation to begin")
+        .is_ok());
 }
 
 #[test]

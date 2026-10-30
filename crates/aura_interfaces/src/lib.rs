@@ -25,18 +25,35 @@ pub const AURA_JSON_TYPE_PROPERTY: &str = "type";
 /// Document role used for Imp single-graph documents.
 pub const ROLE_IMP_GRAPH: &str = "imp-graph";
 
+/// Document role for notation documents.
+pub const ROLE_NOTATION: &str = "notation";
+
 /// Document role for generic JSON documents (fallback view hook).
 pub const ROLE_JSON: &str = "json";
 
 /// Builtin extension package id.
 pub const EXT_AURA_BUILTIN: &str = "aura-builtin";
 
+/// Notation extension package id.
+pub const EXT_AURA_NOTATION: &str = "aura-notation";
+
 /// Builtin command implementation / component ids.
 pub const CMD_DOCUMENT_OPEN: &str = "document.open";
 pub const CMD_DOCUMENT_CLOSE_ACTIVE: &str = "document.close_active";
 
+/// Notation extension command ids.
+pub const CMD_DOCUMENT_NEW_NOTATION: &str = "document.new.notation";
+pub const CMD_DOCUMENT_SAVE: &str = "document.save";
+pub const CMD_NOTATION_TOOL_DRAW: &str = "notation.tool.draw";
+pub const CMD_NOTATION_TOOL_SELECT: &str = "notation.tool.select";
+pub const CMD_NOTATION_TOOL_ERASE: &str = "notation.tool.erase";
+pub const CMD_NOTATION_SNAP_TOGGLE: &str = "notation.snap.toggle";
+
 /// Builtin graph DAG view implementation / component id.
 pub const VIEW_GRAPH_DAG: &str = "graph-dag";
+
+/// Piano roll view implementation / component id.
+pub const VIEW_PIANO_ROLL: &str = "piano-roll";
 
 /// Builtin stackable document-type ids.
 pub const DOC_TYPE_JSON: &str = "json";
@@ -44,11 +61,20 @@ pub const DOC_TYPE_AURA_JSON: &str = "aura-json";
 pub const DOC_TYPE_IMP_GRAPH: &str = "imp-graph";
 pub const DOC_TYPE_IMP_GRAPH_LIBRARY: &str = "imp-graph-library";
 
+/// Notation document-type id.
+pub const DOC_TYPE_NOTATION: &str = "notation";
+
 /// Builtin user-state entry for open document tabs.
 pub const USER_STATE_OPEN_DOCUMENTS: &str = "open-documents";
 
+/// Piano roll UI prefs user-state entry.
+pub const USER_STATE_PIANO_ROLL_UI: &str = "piano-roll-ui";
+
 /// Domain bucket id for open-documents user state.
 pub const USER_STATE_BUCKET_DOCUMENTS: &str = "documents";
+
+/// Domain bucket id for notation UI user state.
+pub const USER_STATE_BUCKET_NOTATION: &str = "aura-notation";
 
 /// Config param key selecting the user-state bucket file id.
 pub const USER_STATE_PARAM_BUCKET: &str = "bucket";

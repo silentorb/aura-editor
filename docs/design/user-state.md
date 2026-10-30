@@ -56,8 +56,16 @@ Declarative requirements for ephemeral Aura Editor user-state persistence. Produ
 
 - Entry shape: ordered `openPaths` plus optional `activePath`.
 - Collect after open, activate, and close; apply once at startup by reopening paths through the normal document open pipeline, then selecting the active path when still open.
+- Only documents with a real filesystem path are collected; untitled notation tabs are omitted.
 - Paths that fail to open are skipped with a warning; startup is not blocked.
 - Canvas pan/zoom is not persisted (see product non-goals).
+
+## Piano roll UI
+
+- Extension `aura-notation` contributes entry `piano-roll-ui` in bucket `aura-notation`.
+- Entry shape: `activeTool` (`draw` | `select` | `erase`), `snapEnabled` (bool), `snapResolution` (`1/4` | `1/8` | `1/16` | `1/32`).
+- Defaults when missing: draw tool, snap on, resolution `1/16`.
+- Collect on tool, snap toggle, and snap-resolution changes; apply once at startup when the component is enabled.
 
 ## Bindings relationship
 

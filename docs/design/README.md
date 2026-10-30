@@ -29,5 +29,7 @@ See [Silent Orb: Scoping and Design](https://silentorb.com/business/product/scop
 |----------|-------------|
 | [`product.md`](product.md) | Product-level declarative requirements |
 | [`extensions.md`](extensions.md) | Extension system: components, config, command/view kinds |
+| [`user-state.md`](user-state.md) | Ephemeral user-state buckets under `.aura-user` |
+| [`piano-roll.md`](piano-roll.md) | Notation document, piano-roll view, modal tools, snap |
 | [`input-bindings.md`](input-bindings.md) | Configurable input→command bindings |
 | [`testing.md`](testing.md) | Unit and functional testing requirements |

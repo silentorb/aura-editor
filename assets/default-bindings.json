@@ -8,6 +8,30 @@
     {
       "command": "document.close_active",
       "when": { "type": "key", "key": "w", "modifiers": ["ctrl"] }
+    },
+    {
+      "command": "document.new.notation",
+      "when": { "type": "key", "key": "n", "modifiers": ["ctrl"] }
+    },
+    {
+      "command": "document.save",
+      "when": { "type": "key", "key": "s", "modifiers": ["ctrl"] }
+    },
+    {
+      "command": "notation.tool.draw",
+      "when": { "type": "key", "key": "d" }
+    },
+    {
+      "command": "notation.tool.select",
+      "when": { "type": "key", "key": "s" }
+    },
+    {
+      "command": "notation.tool.erase",
+      "when": { "type": "key", "key": "e" }
+    },
+    {
+      "command": "notation.snap.toggle",
+      "when": { "type": "key", "key": "n" }
     }
   ]
 }

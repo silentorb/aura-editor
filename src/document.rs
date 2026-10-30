@@ -3,6 +3,7 @@
 use std::any::Any;
 use std::path::{Path, PathBuf};
 
+use aura_ext_notation::Notation;
 use imp_core_types::Graph;
 use serde_json::Value;
 
@@ -13,6 +14,11 @@ use crate::extensions::StackedOpen;
 pub struct DocumentId(u64);
 
 impl DocumentId {
+    /// Creates an id from a raw value (tests and diagnostics).
+    pub fn from_raw(id: u64) -> Self {
+        Self(id)
+    }
+
     /// Numeric value for tests and diagnostics.
     pub fn get(self) -> u64 {
         self.0
@@ -24,6 +30,8 @@ impl DocumentId {
 pub enum DocumentPayload {
     /// Imp single-graph tip (`imp-graph`).
     Graph(Graph),
+    /// Notation tip (`notation`).
+    Notation(Notation),
     /// Generic JSON tip (stopped at `json`).
     Json(Value),
 }
@@ -36,6 +44,10 @@ impl DocumentPayload {
                 .downcast::<Graph>()
                 .ok()
                 .map(|graph| Self::Graph(*graph)),
+            aura_interfaces::DOC_TYPE_NOTATION => payload
+                .downcast::<Notation>()
+                .ok()
+                .map(|notation| Self::Notation(*notation)),
             aura_interfaces::DOC_TYPE_JSON => payload
                 .downcast::<Value>()
                 .ok()
@@ -48,7 +60,23 @@ impl DocumentPayload {
     pub fn graph(&self) -> Option<&Graph> {
         match self {
             Self::Graph(graph) => Some(graph),
-            Self::Json(_) => None,
+            Self::Notation(_) | Self::Json(_) => None,
+        }
+    }
+
+    /// Notation when this tip is a notation document.
+    pub fn notation(&self) -> Option<&Notation> {
+        match self {
+            Self::Notation(notation) => Some(notation),
+            Self::Graph(_) | Self::Json(_) => None,
+        }
+    }
+
+    /// Mutable notation when this tip is a notation document.
+    pub fn notation_mut(&mut self) -> Option<&mut Notation> {
+        match self {
+            Self::Notation(notation) => Some(notation),
+            Self::Graph(_) | Self::Json(_) => None,
         }
     }
 }
@@ -58,9 +86,9 @@ impl DocumentPayload {
 pub struct SessionDocument {
     /// Session-local identity.
     pub id: DocumentId,
-    /// Absolute or user-supplied path used to open the file.
-    pub path: PathBuf,
-    /// Tab title (file stem when available).
+    /// Absolute or user-supplied path when saved/opened; `None` for untitled.
+    pub path: Option<PathBuf>,
+    /// Tab title (file stem when available, or Untitled…).
     pub title: String,
     /// Document-type ids from root to tip.
     pub type_chain: Vec<String>,
@@ -68,6 +96,8 @@ pub struct SessionDocument {
     pub roles: Vec<Option<String>>,
     /// Tip payload.
     pub payload: DocumentPayload,
+    /// Whether the in-memory tip differs from the last saved/opened bytes.
+    pub dirty: bool,
 }
 
 /// Backward-compatible alias used by older call sites.
@@ -79,6 +109,7 @@ pub struct DocumentStore {
     documents: Vec<SessionDocument>,
     active: Option<DocumentId>,
     next_id: u64,
+    next_untitled: u32,
 }
 
 impl DocumentStore {
@@ -103,9 +134,17 @@ impl DocumentStore {
         self.documents.iter().find(|doc| doc.id == id)
     }
 
+    /// Mutable active document, if any.
+    pub fn active_document_mut(&mut self) -> Option<&mut SessionDocument> {
+        let id = self.active?;
+        self.documents.iter_mut().find(|doc| doc.id == id)
+    }
+
     /// Finds an open document by filesystem path.
     pub fn find_by_path(&self, path: &Path) -> Option<&SessionDocument> {
-        self.documents.iter().find(|doc| doc.path == path)
+        self.documents
+            .iter()
+            .find(|doc| doc.path.as_deref() == Some(path))
     }
 
     /// Opens a stacked document at `path`, or activates an existing tab for the same path.
@@ -117,7 +156,11 @@ impl DocumentStore {
         path: PathBuf,
         opened: StackedOpen,
     ) -> Option<DocumentId> {
-        if let Some(existing) = self.documents.iter().find(|doc| doc.path == path) {
+        if let Some(existing) = self
+            .documents
+            .iter()
+            .find(|doc| doc.path.as_deref() == Some(path.as_path()))
+        {
             let id = existing.id;
             self.active = Some(id);
             return Some(id);
@@ -130,14 +173,47 @@ impl DocumentStore {
         let title = title_for_path(&path);
         self.documents.push(SessionDocument {
             id,
-            path,
+            path: Some(path),
             title,
             type_chain: opened.type_chain,
             roles: opened.roles,
             payload,
+            dirty: false,
         });
         self.active = Some(id);
         Some(id)
+    }
+
+    /// Creates an untitled notation tab and activates it.
+    pub fn create_untitled_notation(&mut self) -> DocumentId {
+        let id = DocumentId(self.next_id);
+        self.next_id += 1;
+        let index = self.next_untitled;
+        self.next_untitled += 1;
+        let title = if index == 0 {
+            String::from("Untitled")
+        } else {
+            format!("Untitled-{index}")
+        };
+        self.documents.push(SessionDocument {
+            id,
+            path: None,
+            title,
+            type_chain: vec![
+                aura_interfaces::DOC_TYPE_JSON.to_string(),
+                aura_interfaces::DOC_TYPE_AURA_JSON.to_string(),
+                aura_interfaces::DOC_TYPE_NOTATION.to_string(),
+            ],
+            roles: vec![
+                Some(aura_interfaces::ROLE_JSON.to_string()),
+                None,
+                Some(aura_interfaces::ROLE_NOTATION.to_string()),
+            ],
+            payload: DocumentPayload::Notation(Notation::empty()),
+            dirty: true,
+        });
+        self.active = Some(id);
+        id
     }
 
     /// Opens `graph` at `path`, or activates an existing tab for the same path.
@@ -186,6 +262,34 @@ impl DocumentStore {
         } else {
             Some(self.documents[index - 1].id)
         };
+    }
+
+    /// Mutable document by id.
+    pub fn get_mut(&mut self, id: DocumentId) -> Option<&mut SessionDocument> {
+        self.documents.iter_mut().find(|doc| doc.id == id)
+    }
+
+    /// Marks the document dirty after an in-place edit.
+    pub fn mark_dirty(&mut self, id: DocumentId) {
+        if let Some(doc) = self.get_mut(id) {
+            doc.dirty = true;
+        }
+    }
+
+    /// Assigns a filesystem path after Save As and clears dirty.
+    pub fn set_path_and_clean(&mut self, id: DocumentId, path: PathBuf) {
+        if let Some(doc) = self.get_mut(id) {
+            doc.title = title_for_path(&path);
+            doc.path = Some(path);
+            doc.dirty = false;
+        }
+    }
+
+    /// Clears the dirty flag after a successful save to an existing path.
+    pub fn mark_clean(&mut self, id: DocumentId) {
+        if let Some(doc) = self.get_mut(id) {
+            doc.dirty = false;
+        }
     }
 }
 

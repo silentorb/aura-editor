@@ -5,6 +5,11 @@
       "id": "aura-builtin",
       "enabled": true,
       "params": {}
+    },
+    {
+      "id": "aura-notation",
+      "enabled": true,
+      "params": {}
     }
   ],
   "components": [
@@ -73,6 +78,81 @@
       "enabled": true,
       "params": {
         "bucket": "documents"
+      }
+    },
+    {
+      "id": "document.new.notation",
+      "extensionId": "aura-notation",
+      "kind": "command",
+      "implementationId": "document.new.notation",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "document.save",
+      "extensionId": "aura-notation",
+      "kind": "command",
+      "implementationId": "document.save",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "notation.tool.draw",
+      "extensionId": "aura-notation",
+      "kind": "command",
+      "implementationId": "notation.tool.draw",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "notation.tool.select",
+      "extensionId": "aura-notation",
+      "kind": "command",
+      "implementationId": "notation.tool.select",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "notation.tool.erase",
+      "extensionId": "aura-notation",
+      "kind": "command",
+      "implementationId": "notation.tool.erase",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "notation.snap.toggle",
+      "extensionId": "aura-notation",
+      "kind": "command",
+      "implementationId": "notation.snap.toggle",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "piano-roll",
+      "extensionId": "aura-notation",
+      "kind": "view",
+      "implementationId": "piano-roll",
+      "roles": ["notation"],
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "notation",
+      "extensionId": "aura-notation",
+      "kind": "document-type",
+      "implementationId": "notation",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "piano-roll-ui",
+      "extensionId": "aura-notation",
+      "kind": "user-state",
+      "implementationId": "piano-roll-ui",
+      "enabled": true,
+      "params": {
+        "bucket": "aura-notation"
       }
     }
   ]

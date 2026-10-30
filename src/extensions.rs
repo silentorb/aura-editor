@@ -495,6 +495,7 @@ impl UserStateHost for RegistrationHost {
 /// Calls `register` on every compile-time linked extension package.
 pub fn register_linked_extensions(host: &mut RegistrationHost) {
     aura_ext_builtin::register(host);
+    aura_ext_notation::register(host);
 }
 
 #[cfg(test)]
@@ -519,13 +520,25 @@ mod tests {
         assert!(runtime.has_document_type(DOC_TYPE_IMP_GRAPH));
         assert!(runtime.has_document_type(DOC_TYPE_IMP_GRAPH_LIBRARY));
         assert!(runtime.has_user_state(USER_STATE_OPEN_DOCUMENTS));
+        assert!(runtime.has_user_state(aura_interfaces::USER_STATE_PIANO_ROLL_UI));
+        assert!(runtime.has_command(aura_interfaces::CMD_DOCUMENT_NEW_NOTATION));
+        assert!(runtime.has_document_type(aura_interfaces::DOC_TYPE_NOTATION));
         assert_eq!(
-            runtime.user_state_bindings(),
-            &[UserStateBinding {
+            runtime.view_for_role(aura_interfaces::ROLE_NOTATION),
+            Some(aura_interfaces::VIEW_PIANO_ROLL)
+        );
+        assert!(runtime
+            .user_state_bindings()
+            .contains(&UserStateBinding {
                 entry_id: USER_STATE_OPEN_DOCUMENTS.to_string(),
                 bucket: USER_STATE_BUCKET_DOCUMENTS.to_string(),
-            }]
-        );
+            }));
+        assert!(runtime
+            .user_state_bindings()
+            .contains(&UserStateBinding {
+                entry_id: aura_interfaces::USER_STATE_PIANO_ROLL_UI.to_string(),
+                bucket: aura_interfaces::USER_STATE_BUCKET_NOTATION.to_string(),
+            }));
     }
 
     #[test]

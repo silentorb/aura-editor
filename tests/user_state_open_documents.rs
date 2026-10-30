@@ -53,14 +53,14 @@ fn restores_open_paths_and_active_tab() {
         .documents()
         .documents()
         .iter()
-        .map(|doc| doc.path.as_path())
+        .filter_map(|doc| doc.path.as_deref())
         .collect();
     assert_eq!(paths, vec![sine.as_path(), second.as_path()]);
     assert_eq!(
         restored
             .documents()
             .active_document()
-            .map(|doc| doc.path.as_path()),
+            .and_then(|doc| doc.path.as_deref()),
         Some(sine.as_path())
     );
 
@@ -95,8 +95,11 @@ fn missing_path_on_restore_is_skipped() {
     let restored = app_with_user_dir(user_dir.clone());
     assert_eq!(restored.documents().documents().len(), 1);
     assert_eq!(
-        restored.documents().active_document().map(|doc| &doc.path),
-        Some(&sine)
+        restored
+            .documents()
+            .active_document()
+            .and_then(|doc| doc.path.as_deref()),
+        Some(sine.as_path())
     );
 
     let _ = fs::remove_dir_all(user_dir.path());

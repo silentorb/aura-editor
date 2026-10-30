@@ -302,6 +302,7 @@ name = "aura_editor"
 version = "0.1.0"
 dependencies = [
  "aura_ext_builtin",
+ "aura_ext_notation",
  "aura_interfaces",
  "directories",
  "iced",
@@ -323,6 +324,15 @@ version = "0.1.0"
 dependencies = [
  "aura_interfaces",
  "imp_core_types",
+ "serde_json",
+]
+
+[[package]]
+name = "aura_ext_notation"
+version = "0.1.0"
+dependencies = [
+ "aura_interfaces",
+ "serde",
  "serde_json",
 ]
 

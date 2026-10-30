@@ -8,6 +8,7 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - It is a music/audio **designer**: workflows emphasize procedural and declarative design over traditional DAW-style manual editing of music and audio data.
 - Users can hand-craft data and configuration; that capability must not displace Aura’s procedural, declarative model as the product’s center.
 - **Imp graphs** are the primary persistent resources users open and work with (not traditional DAW project bundles).
+- Hand-crafted **notation** (`notation` Aura JSON) is a second document kind: plain-text beat-grid note events stored as separate files, complementary to procedural graphs. See [`piano-roll.md`](piano-roll.md).
 
 ## Application stack
 
@@ -17,21 +18,28 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 
 ## Documents and MDI
 
-- The editor is a multi-document interface: multiple graph documents may be open in separate tabs.
-- Users can open a single-graph Aura JSON Imp file (`type: "imp-graph"` plus `nodes` / `edges`), switch tabs, and close documents.
+- The editor is a multi-document interface: multiple documents may be open in separate tabs.
+- Users can open a single-graph Aura JSON Imp file (`type: "imp-graph"` plus `nodes` / `edges`) or a notation document (`type: "notation"`), switch tabs, and close documents.
+- Users may create a new empty notation document (untitled), edit it, and save it to disk (Save As when untitled).
 - Opening a path that is already open activates that tab (no duplicate).
-- An open document stores its document-type chain and tip payload (Imp `Graph` for `imp-graph`).
-- The document content pane resolves a **view** by walking the type chain from tip to root and using the first role with an enabled view (`imp-graph` → builtin `graph-dag` today).
-- Open is read-only for now: creating, modifying, and saving documents are out of scope until designed.
-- Open document paths and the active tab are restored from ephemeral user state under the Aura user directory (see [`user-state.md`](user-state.md)); pan/zoom is not.
+- An open document stores its document-type chain and tip payload (Imp `Graph` for `imp-graph`; notation model for `notation`).
+- The document content pane resolves a **view** by walking the type chain from tip to root and using the first role with an enabled view (`imp-graph` → builtin `graph-dag`; `notation` → `piano-roll`).
+- Imp graph open remains read-only: creating, modifying, and saving graph documents are out of scope until designed.
+- Notation documents support create, modify, and save in this slice (see [`piano-roll.md`](piano-roll.md)).
+- Open document paths and the active tab are restored from ephemeral user state under the Aura user directory (see [`user-state.md`](user-state.md)); untitled tabs and pan/zoom are not.
 - Extensibility (commands, views, document types, and user-state) follows [`extensions.md`](extensions.md).
 
 ## Graph files
 
 - Aura JSON documents declare a root string **`type`** naming the document-type id.
-- Supported open format today: Aura JSON with `type: "imp-graph"` and a single Imp graph object (`nodes` + `edges`).
+- Supported Imp open format: Aura JSON with `type: "imp-graph"` and a single Imp graph object (`nodes` + `edges`).
 - Imp **GraphLibrary** Aura JSON (`type: "imp-graph-library"`, plus `id` + `definitions`) is recognized then rejected with a distinct, typed error (no session tab) until catalog open is designed.
 - File open uses a native dialog; tests and tooling may open by path without a dialog.
+
+## Notation score files
+
+- Supported notation format: Aura JSON with `type: "notation"` and versioned tempo, time signature, and note events (see [`piano-roll.md`](piano-roll.md)).
+- New File creates an empty notation document in memory; Save writes Aura JSON; Open loads an existing notation file into the piano-roll view.
 
 ## Graph visualization
 
@@ -79,6 +87,7 @@ Repos and projects use kebab-case. Rust packages use snake_case (`aura_editor`).
 - Persisting pan/zoom camera per document across launches
 - Opening GraphLibrary catalogs as editor documents until that flow is designed
 - Creating, editing, or saving graph documents in the current read-only open slice
+- Live playback from the notation grid in this slice
 - Overriding native OS input commands via the bindings layer
 
 Background: [`../scoping/background.md`](../scoping/background.md).

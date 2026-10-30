@@ -33,12 +33,13 @@ Declarative requirements for Aura Editor extensions. Motivation: [`../scoping/ex
 - An extension registers a command implementation; config enables the component so the id appears in the host command registry.
 - Input bindings and UI chrome invoke the same string ids. Unknown ids in a bindings file are skipped when they are not in the command registry.
 - Builtin commands include `document.open` and `document.close_active`.
+- The `aura-notation` extension adds `document.new.notation`, `document.save`, and notation tool/snap commands (`notation.tool.draw`, `notation.tool.select`, `notation.tool.erase`, `notation.snap.toggle`).
 
 ### `view`
 
 - A view component declares `roles` (document roles it can present). When omitted, hosts may default `roles` to `[component.id]`.
 - The host content pane resolves a document’s view by walking the open document’s type chain from tip to root and taking the first declared role that has an enabled view.
-- Imp single-graph tips use role `imp-graph`. The builtin `graph-dag` view claims that role. Role `json` is reserved for a future generic JSON fallback view.
+- Imp single-graph tips use role `imp-graph`. The builtin `graph-dag` view claims that role. Notation tips use role `notation`; the `piano-roll` view claims that role. Role `json` is reserved for a future generic JSON fallback view.
 - Iced `Element` construction may live in a host adapter so `aura_interfaces` does not depend on application `Message` types. View packages may still depend on Iced for their own widgets.
 - When no enabled view implements any role on the chain, the host shows an explicit error placeholder (not a panic).
 - When multiple views claim the same role, the first enabled config claim wins.
@@ -48,8 +49,9 @@ Declarative requirements for Aura Editor extensions. Motivation: [`../scoping/ex
 - Document types are **stackable**: each has an optional parent id. Roots match raw file bytes; children refine a parent payload.
 - Open pipeline: path/bytes → stacked document-types → session document (full chain + tip payload) → view by role (tip first, then parents).
 - Builtin stack for graphs: `json` → `aura-json` → `imp-graph` (success) or `imp-graph-library` (open rejects; no session tab).
+- Notation stack: `json` → `aura-json` → `notation` (see [`piano-roll.md`](piano-roll.md)).
 - **Aura JSON:** a JSON object with root string property `type`. After `aura-json` opens, the host selects the child whose implementation id equals that `type` value (no sibling sniffing).
-- Payload between layers is type-erased (`Any`); Imp `Graph` deserialization lives in the `imp-graph` implementation.
+- Payload between layers is type-erased (`Any`); Imp `Graph` deserialization lives in the `imp-graph` implementation; notation deserialization lives in the `notation` implementation.
 
 ### `user-state`
 
@@ -61,6 +63,11 @@ Declarative requirements for Aura Editor extensions. Motivation: [`../scoping/ex
 ## Builtin extension
 
 - Package id `aura-builtin` provides commands, stackable document types (`json`, `aura-json`, `imp-graph`, `imp-graph-library`), the `graph-dag` view, and the `open-documents` user-state entry.
+- It is linked into the editor binary and enabled in the bundled default config.
+
+## Notation extension
+
+- Package id `aura-notation` provides the `notation` document type, `piano-roll` view, notation create/save and tool/snap commands, and the `piano-roll-ui` user-state entry (bucket `aura-notation`).
 - It is linked into the editor binary and enabled in the bundled default config.
 
 ## Non-goals / avoided approaches

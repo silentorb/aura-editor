@@ -1,0 +1,23 @@
+{
+  "type": "notation",
+  "version": 1,
+  "tempoBpm": 120,
+  "timeSignature": {
+    "beatsPerBar": 4,
+    "beatUnit": 4
+  },
+  "events": [
+    {
+      "semitone": 60,
+      "startBeats": 0.0,
+      "durationBeats": 0.25,
+      "velocity": 1.0
+    },
+    {
+      "semitone": 64,
+      "startBeats": 0.25,
+      "durationBeats": 0.25,
+      "velocity": 0.8
+    }
+  ]
+}
