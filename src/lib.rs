@@ -361,6 +361,7 @@ impl App {
             PianoRollEdit::Draw { document_id, .. }
             | PianoRollEdit::Select { document_id, .. }
             | PianoRollEdit::MoveSelected { document_id, .. }
+            | PianoRollEdit::ResizeSelected { document_id, .. }
             | PianoRollEdit::Erase { document_id, .. } => *document_id,
         };
 

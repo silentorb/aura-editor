@@ -211,3 +211,49 @@ fn apply_edit_move_updates_note() {
     // silence unused save command constant in this module's imports if unused
     let _ = CMD_DOCUMENT_SAVE;
 }
+
+#[test]
+fn apply_edit_resize_updates_start_and_duration() {
+    let mut notation = aura_editor::Notation::empty();
+    notation
+        .events
+        .push(aura_editor::NotationNote::new(60, 1.0, 0.5));
+
+    let right = apply_edit(
+        &mut notation,
+        &PianoRollEdit::ResizeSelected {
+            document_id: aura_editor::DocumentId::from_raw(1),
+            note_index: 0,
+            start_beats: 1.0,
+            duration_beats: 1.0,
+        },
+    );
+    assert!(right);
+    assert_eq!(notation.events[0].start_beats, 1.0);
+    assert_eq!(notation.events[0].duration_beats, 1.0);
+
+    let left = apply_edit(
+        &mut notation,
+        &PianoRollEdit::ResizeSelected {
+            document_id: aura_editor::DocumentId::from_raw(1),
+            note_index: 0,
+            start_beats: 0.5,
+            duration_beats: 1.5,
+        },
+    );
+    assert!(left);
+    assert_eq!(notation.events[0].start_beats, 0.5);
+    assert_eq!(notation.events[0].duration_beats, 1.5);
+    assert!((notation.events[0].start_beats + notation.events[0].duration_beats - 2.0).abs() < 1e-9);
+
+    let unchanged = apply_edit(
+        &mut notation,
+        &PianoRollEdit::ResizeSelected {
+            document_id: aura_editor::DocumentId::from_raw(1),
+            note_index: 0,
+            start_beats: 0.5,
+            duration_beats: 1.5,
+        },
+    );
+    assert!(!unchanged);
+}

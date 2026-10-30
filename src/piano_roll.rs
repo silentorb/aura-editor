@@ -27,6 +27,8 @@ const MIN_SCALE: f32 = 0.35;
 const MAX_SCALE: f32 = 3.0;
 /// Default visible duration in beats when empty.
 const DEFAULT_BEATS: f64 = 8.0;
+/// Screen-space hit width for note left/right resize edges.
+const EDGE_HIT_PX: f32 = 6.0;
 
 /// Clamps canvas zoom.
 pub fn clamp_scale(scale: f32) -> f32 {
@@ -65,6 +67,17 @@ pub enum PianoRollEdit {
         /// New semitone.
         semitone: i16,
     },
+    /// Resize the selected note (already snapped start/duration).
+    ResizeSelected {
+        /// Target document.
+        document_id: DocumentId,
+        /// Note index.
+        note_index: usize,
+        /// New start beats.
+        start_beats: f64,
+        /// New duration in beats.
+        duration_beats: f64,
+    },
     /// Delete a note by index.
     Erase {
         /// Target document.
@@ -72,6 +85,21 @@ pub enum PianoRollEdit {
         /// Note index.
         note_index: usize,
     },
+}
+
+/// Which part of a note the cursor hit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NoteHitPart {
+    Body,
+    LeftEdge,
+    RightEdge,
+}
+
+/// Which horizontal edge is being resized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResizeEdge {
+    Left,
+    Right,
 }
 
 /// Canvas program for the piano roll (time × pitch).
@@ -116,7 +144,12 @@ impl PianoRollView {
     }
 
     fn note_at(&self, state: &GridState, local: Point) -> Option<usize> {
+        self.hit_note(state, local).map(|(index, _)| index)
+    }
+
+    fn hit_note(&self, state: &GridState, local: Point) -> Option<(usize, NoteHitPart)> {
         let (beats, semitone) = self.world_from_cursor(state, local);
+        let edge_beats = f64::from(EDGE_HIT_PX / (state.scale.max(0.25) * PX_PER_BEAT));
         self.notation
             .events
             .iter()
@@ -126,12 +159,25 @@ impl PianoRollView {
                 if note.semitone != semitone {
                     return None;
                 }
-                if beats >= note.start_beats && beats < note.start_beats + note.duration_beats {
-                    Some(index)
-                } else {
-                    None
+                let end = note.start_beats + note.duration_beats;
+                if beats < note.start_beats || beats >= end {
+                    return None;
                 }
+                let half = note.duration_beats * 0.5;
+                let edge = edge_beats.min(half);
+                let part = if beats < note.start_beats + edge {
+                    NoteHitPart::LeftEdge
+                } else if beats >= end - edge {
+                    NoteHitPart::RightEdge
+                } else {
+                    NoteHitPart::Body
+                };
+                Some((index, part))
             })
+    }
+
+    fn min_duration_beats(&self) -> f64 {
+        self.snap_resolution.beats()
     }
 }
 
@@ -144,6 +190,8 @@ pub struct GridState {
     pan_last: Option<Point>,
     /// Select-tool drag: note index and grab offset in beats.
     move_drag: Option<MoveDrag>,
+    /// Select-tool edge resize drag.
+    resize_drag: Option<ResizeDrag>,
     document_key: Option<u64>,
 }
 
@@ -154,6 +202,14 @@ struct MoveDrag {
     origin_semitone: i16,
 }
 
+#[derive(Debug, Clone)]
+struct ResizeDrag {
+    note_index: usize,
+    edge: ResizeEdge,
+    origin_end_beats: f64,
+    origin_start_beats: f64,
+}
+
 impl Default for GridState {
     fn default() -> Self {
         Self {
@@ -161,6 +217,7 @@ impl Default for GridState {
             scale: 1.0,
             pan_last: None,
             move_drag: None,
+            resize_drag: None,
             document_key: None,
         }
     }
@@ -179,6 +236,7 @@ impl GridState {
         let _ = bounds;
         self.pan_last = None;
         self.move_drag = None;
+        self.resize_drag = None;
     }
 }
 
@@ -205,7 +263,10 @@ where
                 state.pan_last = Some(position);
                 return Some(canvas::Action::request_redraw().and_capture());
             }
-            if matches!(self.tool, NotationTool::Draw | NotationTool::Erase) {
+            if matches!(
+                self.tool,
+                NotationTool::Draw | NotationTool::Erase | NotationTool::Select
+            ) {
                 return Some(canvas::Action::request_redraw());
             }
             return None;
@@ -243,14 +304,36 @@ where
                         );
                     }
                     NotationTool::Select => {
-                        if let Some(index) = self.note_at(state, cursor_in_bounds) {
+                        if let Some((index, part)) = self.hit_note(state, cursor_in_bounds) {
                             let note = &self.notation.events[index];
                             let (beats, _) = self.world_from_cursor(state, cursor_in_bounds);
-                            state.move_drag = Some(MoveDrag {
-                                note_index: index,
-                                grab_offset_beats: beats - note.start_beats,
-                                origin_semitone: note.semitone,
-                            });
+                            state.move_drag = None;
+                            state.resize_drag = None;
+                            match part {
+                                NoteHitPart::LeftEdge => {
+                                    state.resize_drag = Some(ResizeDrag {
+                                        note_index: index,
+                                        edge: ResizeEdge::Left,
+                                        origin_end_beats: note.start_beats + note.duration_beats,
+                                        origin_start_beats: note.start_beats,
+                                    });
+                                }
+                                NoteHitPart::RightEdge => {
+                                    state.resize_drag = Some(ResizeDrag {
+                                        note_index: index,
+                                        edge: ResizeEdge::Right,
+                                        origin_end_beats: note.start_beats + note.duration_beats,
+                                        origin_start_beats: note.start_beats,
+                                    });
+                                }
+                                NoteHitPart::Body => {
+                                    state.move_drag = Some(MoveDrag {
+                                        note_index: index,
+                                        grab_offset_beats: beats - note.start_beats,
+                                        origin_semitone: note.semitone,
+                                    });
+                                }
+                            }
                             let edit = PianoRollEdit::Select {
                                 document_id: self.document_id,
                                 note_index: Some(index),
@@ -260,6 +343,7 @@ where
                             );
                         }
                         state.move_drag = None;
+                        state.resize_drag = None;
                         let edit = PianoRollEdit::Select {
                             document_id: self.document_id,
                             note_index: None,
@@ -283,6 +367,33 @@ where
                 }
             }
             canvas::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
+                if let Some(drag) = state.resize_drag.take() {
+                    let (beats, _) = self.world_from_cursor(state, cursor_in_bounds);
+                    let step = self.snap_resolution.beats();
+                    let min_dur = self.min_duration_beats();
+                    let (start_beats, duration_beats) = match drag.edge {
+                        ResizeEdge::Right => {
+                            let raw_end = beats.max(drag.origin_start_beats + min_dur);
+                            let end = snap_beats(raw_end, step, self.snap_enabled)
+                                .max(drag.origin_start_beats + min_dur);
+                            (drag.origin_start_beats, end - drag.origin_start_beats)
+                        }
+                        ResizeEdge::Left => {
+                            let max_start = (drag.origin_end_beats - min_dur).max(0.0);
+                            let raw_start = beats.clamp(0.0, max_start);
+                            let start = snap_beats(raw_start, step, self.snap_enabled)
+                                .clamp(0.0, max_start);
+                            (start, drag.origin_end_beats - start)
+                        }
+                    };
+                    let edit = PianoRollEdit::ResizeSelected {
+                        document_id: self.document_id,
+                        note_index: drag.note_index,
+                        start_beats,
+                        duration_beats: duration_beats.max(min_dur),
+                    };
+                    return Some(canvas::Action::publish(Message::from(edit)).and_capture());
+                }
                 if let Some(drag) = state.move_drag.take() {
                     let (beats, semitone) = self.world_from_cursor(state, cursor_in_bounds);
                     let step = self.snap_resolution.beats();
@@ -438,8 +549,17 @@ where
         match self.tool {
             NotationTool::Draw | NotationTool::Erase => mouse::Interaction::Hidden,
             NotationTool::Select => {
-                if state.move_drag.is_some() {
+                if state.resize_drag.is_some() {
+                    mouse::Interaction::ResizingHorizontally
+                } else if state.move_drag.is_some() {
                     mouse::Interaction::Grabbing
+                } else if let Some(position) = cursor.position_in(bounds) {
+                    match self.hit_note(state, position) {
+                        Some((_, NoteHitPart::LeftEdge | NoteHitPart::RightEdge)) => {
+                            mouse::Interaction::ResizingHorizontally
+                        }
+                        _ => mouse::Interaction::default(),
+                    }
                 } else {
                     mouse::Interaction::default()
                 }
@@ -654,6 +774,25 @@ pub fn apply_edit(notation: &mut Notation, edit: &PianoRollEdit) -> bool {
                 }
                 note.start_beats = *start_beats;
                 note.semitone = *semitone;
+                true
+            } else {
+                false
+            }
+        }
+        PianoRollEdit::ResizeSelected {
+            note_index,
+            start_beats,
+            duration_beats,
+            ..
+        } => {
+            if let Some(note) = notation.events.get_mut(*note_index) {
+                if (note.start_beats - start_beats).abs() < 1e-9
+                    && (note.duration_beats - duration_beats).abs() < 1e-9
+                {
+                    return false;
+                }
+                note.start_beats = *start_beats;
+                note.duration_beats = *duration_beats;
                 true
             } else {
                 false

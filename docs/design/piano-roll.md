@@ -51,7 +51,7 @@ Interaction is **tool-modal**: left-click / drag meaning depends on the active t
 | Tool | Default binding | Cursor | Primary action |
 |------|-----------------|--------|----------------|
 | Draw | `D` | Pen overlay (tip on hotspot) | Click empty grid cell → place note at snapped start and pitch; duration equals the current snap size in beats |
-| Select | `S` | Default pointer | Click note to select; drag selection to move (respecting snap when enabled); click empty space clears selection |
+| Select | `S` | Default pointer; horizontal resize on note edges | Click note to select; drag body to move (respecting snap when enabled); drag left/right edge to resize duration; click empty space clears selection |
 | Erase | `E` | Eraser overlay (corner on hotspot) | Click note to delete |
 
 Custom Draw/Erase cursors are canvas overlays (iced has no custom OS cursors). The pointer hotspot is fixed across tools; glyphs pivot around that hotspot so tool switches do not shift placement.
