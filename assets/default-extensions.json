@@ -30,6 +30,30 @@
       "params": {}
     },
     {
+      "id": "play.start",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "play.start",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "play.stop",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "play.stop",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "play.toggle",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "play.toggle",
+      "enabled": true,
+      "params": {}
+    },
+    {
       "id": "graph-dag",
       "extensionId": "aura-builtin",
       "kind": "view",

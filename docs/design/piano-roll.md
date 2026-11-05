@@ -6,7 +6,7 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 
 - Users can create and edit discrete note events on a time × pitch grid — a classic MIDI piano roll — without making destructive timeline editing the product’s center.
 - Notation is a **complement** to procedural Imp graphs: one plain-text Aura JSON file per notation document, composed later with other files like a programming project.
-- This slice is **silent**: no live audition or transport playback.
+- This slice does not audition notation events: global Play streams the active Imp graph tab’s in-memory procedural audio. Start from a piano-roll tip fails clearly until notation→graph wiring exists.
 
 ## Document type
 
@@ -73,7 +73,7 @@ Tool state is editor-global (not per document).
 
 ## Non-goals / avoided approaches
 
-- Live playback or note audition in this slice
+- Auditioning the open notation document’s events (no notation→graph wiring / playhead UI yet)
 - Measure / bar chrome and timing-division UI beyond the snap subdivision
 - Engine `aura_sequencing` serde or Imp literal-score nodes in this slice
 - Making the piano roll the primary authoring model over Imp graphs

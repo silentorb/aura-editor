@@ -23,6 +23,11 @@ path = "src/main.rs"
 aura_ext_builtin = { path = "crates/aura_ext_builtin" }
 aura_ext_notation = { path = "crates/aura_ext_notation" }
 aura_interfaces = { path = "crates/aura_interfaces" }
+aura_imp = { path = "../aura-engine/crates/aura_imp" }
+aura_integration = { path = "../aura-engine/crates/aura_integration" }
+aura_io_cpal = { path = "../aura-engine/crates/aura_io_cpal" }
+aura_render = { path = "../aura-engine/crates/aura_render" }
+aura_sample = { path = "../aura-engine/crates/aura_sample" }
 directories = "6"
 iced = { version = "0.14", features = ["canvas", "tokio"] }
 iced_aw = { version = "0.14", default-features = false, features = ["menu"] }

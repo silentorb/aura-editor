@@ -14,6 +14,7 @@ mod logging;
 mod menu_bar;
 mod piano_roll;
 mod piano_roll_ui;
+mod playback;
 mod user_state;
 
 pub use bindings::{user_bindings_path, Bindings, DEFAULT_BINDINGS_JSON};
@@ -44,27 +45,34 @@ pub use aura_ext_notation::{
 pub use aura_interfaces::{
     CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_NEW_NOTATION, CMD_DOCUMENT_OPEN, CMD_DOCUMENT_SAVE,
     CMD_NOTATION_SNAP_TOGGLE, CMD_NOTATION_TOOL_DRAW, CMD_NOTATION_TOOL_ERASE,
-    CMD_NOTATION_TOOL_SELECT, DOC_TYPE_AURA_JSON, DOC_TYPE_IMP_GRAPH, DOC_TYPE_IMP_GRAPH_LIBRARY,
-    DOC_TYPE_JSON, DOC_TYPE_NOTATION, ROLE_IMP_GRAPH, ROLE_JSON, ROLE_NOTATION,
-    USER_STATE_BUCKET_DOCUMENTS, USER_STATE_BUCKET_NOTATION, USER_STATE_PIANO_ROLL_UI,
-    USER_STATE_OPEN_DOCUMENTS, VIEW_GRAPH_DAG, VIEW_PIANO_ROLL,
+    CMD_NOTATION_TOOL_SELECT, CMD_PLAY_START, CMD_PLAY_STOP, CMD_PLAY_TOGGLE, DOC_TYPE_AURA_JSON,
+    DOC_TYPE_IMP_GRAPH, DOC_TYPE_IMP_GRAPH_LIBRARY, DOC_TYPE_JSON, DOC_TYPE_NOTATION,
+    ROLE_IMP_GRAPH, ROLE_JSON, ROLE_NOTATION, USER_STATE_BUCKET_DOCUMENTS,
+    USER_STATE_BUCKET_NOTATION, USER_STATE_PIANO_ROLL_UI, USER_STATE_OPEN_DOCUMENTS, VIEW_GRAPH_DAG,
+    VIEW_PIANO_ROLL,
 };
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use aura_io_cpal::PlaybackEngine;
+use aura_sample::SampleRate;
 use iced::keyboard::{self, Key, Modifiers};
 use iced::widget::{button, column, container, pick_list, row, text, Space};
 use iced::{Element, Fill, Subscription, Task};
 use tracing::warn;
 
 use crate::graph_view::graph_canvas;
+use crate::playback::prepare_session_playback;
 
 /// Root application state for the editor shell.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct App {
     documents: DocumentStore,
     /// Last open/load/save error shown in the status banner.
     last_error: Option<OpenError>,
+    /// Non-open status text (playback errors and notices).
+    status_notice: Option<String>,
     /// Resolved input bindings (may be empty).
     bindings: Bindings,
     /// Extension command/view/document-type registries.
@@ -73,6 +81,8 @@ pub struct App {
     user_state: UserStateStore,
     /// Notation tool / snap prefs (persisted when enabled).
     piano_roll_ui: PianoRollUiState,
+    /// CPAL stream owner for the active playback graph.
+    playback: PlaybackEngine,
 }
 
 /// Messages produced by the multi-document shell.
@@ -152,10 +162,12 @@ impl App {
         Self {
             documents: DocumentStore::default(),
             last_error: None,
+            status_notice: None,
             bindings,
             extensions,
             user_state: UserStateStore::in_memory(),
             piano_roll_ui: PianoRollUiState::default(),
+            playback: PlaybackEngine::new(),
         }
     }
 
@@ -171,13 +183,20 @@ impl App {
         let mut app = Self {
             documents: DocumentStore::default(),
             last_error: None,
+            status_notice: None,
             bindings,
             extensions,
             user_state,
             piano_roll_ui,
+            playback: PlaybackEngine::new(),
         };
         app.restore_open_documents();
         app
+    }
+
+    /// Whether the CPAL playback engine currently holds a running stream.
+    pub fn is_playing(&self) -> bool {
+        self.playback.is_playing()
     }
 
     /// Bucketed user-state store.
@@ -233,6 +252,12 @@ impl App {
         if let Some(error) = &self.last_error {
             return error.status_message();
         }
+        if let Some(notice) = &self.status_notice {
+            return notice.clone();
+        }
+        if self.playback.is_playing() {
+            return String::from("Playing");
+        }
         if self.documents.active_document().is_some() {
             String::from("Ready")
         } else {
@@ -260,6 +285,7 @@ impl App {
             Message::OpenPath(path) => match self.extensions.open_document(&path) {
                 Ok(opened) => {
                     self.last_error = None;
+                    self.status_notice = None;
                     let path_for_error = path.clone();
                     if self
                         .documents
@@ -334,6 +360,19 @@ impl App {
                         self.piano_roll_ui.snap_enabled = !self.piano_roll_ui.snap_enabled;
                         return self.sync_piano_roll_ui_task();
                     }
+                    CMD_PLAY_START => {
+                        self.start_playback();
+                    }
+                    CMD_PLAY_STOP => {
+                        self.stop_playback();
+                    }
+                    CMD_PLAY_TOGGLE => {
+                        if self.playback.is_playing() {
+                            self.stop_playback();
+                        } else {
+                            self.start_playback();
+                        }
+                    }
                     _ => {}
                 }
             }
@@ -354,6 +393,48 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    fn start_playback(&mut self) {
+        let Some(doc) = self.documents.active_document() else {
+            self.status_notice = Some(String::from("Playback requires an open Imp graph"));
+            return;
+        };
+        let Some(graph) = doc.payload.graph() else {
+            self.status_notice = Some(String::from("Playback requires an Imp graph tab"));
+            return;
+        };
+        let neighbor_hint = doc.path.as_deref();
+        let sample_rate = SampleRate::RATE_44100;
+
+        let sampler = match prepare_session_playback(graph, neighbor_hint, sample_rate) {
+            Ok((_node_id, sampler)) => sampler,
+            Err(error) => {
+                self.status_notice = Some(format!("Playback failed: {error}"));
+                return;
+            }
+        };
+
+        match self.playback.start(Arc::from(sampler), sample_rate) {
+            Ok(()) => {
+                self.last_error = None;
+                self.status_notice = None;
+            }
+            Err(error) => {
+                self.status_notice = Some(format!("Playback failed: {error}"));
+            }
+        }
+    }
+
+    fn stop_playback(&mut self) {
+        self.playback.stop();
+        if self
+            .status_notice
+            .as_deref()
+            .is_some_and(|notice| notice == "Playing" || notice.starts_with("Playback "))
+        {
+            self.status_notice = None;
+        }
     }
 
     fn apply_piano_roll_edit(&mut self, edit: PianoRollEdit) -> Task<Message> {

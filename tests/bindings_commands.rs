@@ -5,9 +5,10 @@ use std::path::PathBuf;
 
 use aura_editor::{
     App, Bindings, CommandId, ExtensionRuntime, Message, CMD_DOCUMENT_CLOSE_ACTIVE,
-    CMD_DOCUMENT_OPEN, DEFAULT_BINDINGS_JSON,
+    CMD_DOCUMENT_NEW_NOTATION, CMD_DOCUMENT_OPEN, CMD_PLAY_START, CMD_PLAY_TOGGLE,
+    DEFAULT_BINDINGS_JSON,
 };
-use iced::keyboard::{Key, Modifiers};
+use iced::keyboard::{key::Named, Key, Modifiers};
 
 fn fixture(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -166,6 +167,64 @@ fn missing_view_role_shows_placeholder() {
     assert!(ui
         .find("No enabled view for role `imp-graph`")
         .is_ok());
+}
+
+#[test]
+fn start_without_open_graph_sets_status() {
+    let mut app = App::with_bindings(Bindings::empty());
+    let _ = app.update(Message::Command(CommandId::new(CMD_PLAY_START)));
+    assert!(!app.is_playing());
+    assert_eq!(app.status(), "Playback requires an open Imp graph");
+}
+
+#[test]
+fn start_on_notation_sets_status() {
+    let mut app = App::with_bindings(Bindings::empty());
+    let _ = app.update(Message::Command(CommandId::new(CMD_DOCUMENT_NEW_NOTATION)));
+    let _ = app.update(Message::Command(CommandId::new(CMD_PLAY_START)));
+    assert!(!app.is_playing());
+    assert!(app.status().contains("Imp graph"));
+}
+
+#[test]
+fn start_on_open_graph_attempts_playback() {
+    let mut app = App::with_bindings(Bindings::empty());
+    let _ = app.update(Message::OpenPath(fixture("sine.json")));
+    let _ = app.update(Message::Command(CommandId::new(CMD_PLAY_START)));
+
+    // Device may be absent under WSL; start must still resolve without panic.
+    assert!(
+        app.is_playing()
+            || app.status().starts_with("Playback failed:")
+            || app.status() == "Playing"
+    );
+}
+
+#[test]
+fn space_dispatches_play_toggle() {
+    let bindings =
+        Bindings::from_json_str(DEFAULT_BINDINGS_JSON, &known_commands()).unwrap();
+    let mut app = App::with_bindings(bindings);
+    let _ = app.update(Message::OpenPath(fixture("sine.json")));
+
+    let _ = app.update(Message::KeyInput {
+        key: Key::Named(Named::Space),
+        modifiers: Modifiers::empty(),
+    });
+
+    // Device may be absent under WSL; toggle must still resolve without panic.
+    assert!(
+        app.is_playing()
+            || app.status().starts_with("Playback failed:")
+            || app.status() == "Playing"
+    );
+
+    // Second toggle stops when playing; when start failed, stays idle.
+    let was_playing = app.is_playing();
+    let _ = app.update(Message::Command(CommandId::new(CMD_PLAY_TOGGLE)));
+    if was_playing {
+        assert!(!app.is_playing());
+    }
 }
 
 #[test]

@@ -40,6 +40,9 @@ pub const EXT_AURA_NOTATION: &str = "aura-notation";
 /// Builtin command implementation / component ids.
 pub const CMD_DOCUMENT_OPEN: &str = "document.open";
 pub const CMD_DOCUMENT_CLOSE_ACTIVE: &str = "document.close_active";
+pub const CMD_PLAY_START: &str = "play.start";
+pub const CMD_PLAY_STOP: &str = "play.stop";
+pub const CMD_PLAY_TOGGLE: &str = "play.toggle";
 
 /// Notation extension command ids.
 pub const CMD_DOCUMENT_NEW_NOTATION: &str = "document.new.notation";

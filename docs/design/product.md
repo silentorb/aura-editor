@@ -50,10 +50,20 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 
 ## Shell chrome
 
-- The shell has a global **menu bar** with File / Edit / View roots.
+- The shell has a global **menu bar** with File / Edit / View / Play roots.
 - File menu exposes document commands (Open, New notation, Save, Close). Edit and View are reserved for future global actions.
+- Play menu exposes transport commands (Start, Stop). Toggle playback is available as a command (default Space) and need not appear in the menu.
 - **Per-view toolbars** hold view-specific controls (for example the piano-roll tool strip). Menus in this slice are not contextual to the active view.
 - A global application toolbar and per-view contextual menus are deferred.
+
+## Playback
+
+- **Start** / **Stop** / **Toggle** (`play.start`, `play.stop`, `play.toggle`) stream the **active Imp graph tab’s in-memory session graph** through CPAL (`translate` → `PlaybackEngine`), always from `t = 0`.
+- The playable sink is that graph’s most-output node (prefer id `out`, else the sole `output` node). Saving is not required to play.
+- When the open graph has a path, neighboring graph libraries may still be discovered from that path as a hint; the graph body itself comes from session memory, not a disk reload.
+- When the active tip is not an Imp graph (for example a piano-roll / notation tab), Start fails with a clear status message.
+- Playback previews the graph’s procedural audio, not the contents of an open piano-roll document. Notation→graph wiring and playhead UI are out of scope in this slice.
+- Missing audio devices (common under WSL) surface a status error; the app must not panic.
 
 ## Input bindings
 
@@ -94,7 +104,10 @@ Repos and projects use kebab-case. Rust packages use snake_case (`aura_editor`).
 - Persisting pan/zoom camera per document across launches
 - Opening GraphLibrary catalogs as editor documents until that flow is designed
 - Creating, editing, or saving graph documents in the current read-only open slice
-- Live playback from the notation grid in this slice
+- Auditioning piano-roll notation content (no notation→graph / literal-score wiring yet)
+- Playhead visualization, scrub bar, or user-placed playback start position
+- Explicit playback-node override / pinned target (Select playback node deferred; fringe cases TBD)
+- Fully abstracting persistence from Aura operation (paths remain optional library-discovery hints)
 - Overriding native OS input commands via the bindings layer
 
 Background: [`../scoping/background.md`](../scoping/background.md).

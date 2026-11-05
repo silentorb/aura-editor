@@ -32,6 +32,10 @@
     {
       "command": "notation.snap.toggle",
       "when": { "type": "key", "key": "n" }
+    },
+    {
+      "command": "play.toggle",
+      "when": { "type": "key", "key": "space" }
     }
   ]
 }
