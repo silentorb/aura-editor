@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use aura_editor::{
     App, Bindings, CommandId, ExtensionRuntime, Message, CMD_DOCUMENT_CLOSE_ACTIVE,
-    CMD_DOCUMENT_NEW_NOTATION, CMD_DOCUMENT_OPEN, CMD_PLAY_START, CMD_PLAY_TOGGLE,
+    CMD_DOCUMENT_NEW_NOTATION, CMD_DOCUMENT_OPEN, CMD_PLAY_START, CMD_PLAY_STOP, CMD_PLAY_TOGGLE,
     DEFAULT_BINDINGS_JSON,
 };
 use iced::keyboard::{key::Named, Key, Modifiers};
@@ -174,16 +174,30 @@ fn start_without_open_graph_sets_status() {
     let mut app = App::with_bindings(Bindings::empty());
     let _ = app.update(Message::Command(CommandId::new(CMD_PLAY_START)));
     assert!(!app.is_playing());
-    assert_eq!(app.status(), "Playback requires an open Imp graph");
+    assert_eq!(app.status(), "Playback requires an open document");
 }
 
 #[test]
-fn start_on_notation_sets_status() {
+fn start_on_notation_attempts_playback() {
     let mut app = App::with_bindings(Bindings::empty());
     let _ = app.update(Message::Command(CommandId::new(CMD_DOCUMENT_NEW_NOTATION)));
+    let document_id = app.documents().active_id().expect("notation tab");
+    let _ = app.update(Message::PianoRoll(aura_editor::PianoRollEdit::SetPlayhead {
+        document_id,
+        beats: 1.0,
+    }));
+    assert!((app.parked_playhead_beats(document_id) - 1.0).abs() < 1e-9);
+
     let _ = app.update(Message::Command(CommandId::new(CMD_PLAY_START)));
+    // Device may be absent under WSL; notation start must still resolve without panic.
+    assert!(
+        app.is_playing()
+            || app.status().starts_with("Playback failed:")
+            || app.status() == "Playing"
+    );
+    let _ = app.update(Message::Command(CommandId::new(CMD_PLAY_STOP)));
     assert!(!app.is_playing());
-    assert!(app.status().contains("Imp graph"));
+    assert!((app.display_playhead_beats() - 1.0).abs() < 1e-9);
 }
 
 #[test]

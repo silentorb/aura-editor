@@ -1,14 +1,21 @@
-//! Playback helpers for resolving the session graph's audio sink.
+//! Playback helpers for Imp graphs and notation audition.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
+use aura_ext_notation::Notation;
 use aura_imp::{
-    aura_registry_with_libraries, discover_graph_libraries, graph_from_json_str, GraphJsonError,
-    Registry, RegistryError,
+    aura_registry, graph_from_json_str, discover_graph_libraries, aura_registry_with_libraries,
+    GraphJsonError, NodeId, Registry, RegistryError,
 };
-use aura_integration::translate_graph_to_sampler;
+use aura_integration::{
+    translate_graph_to_sampler, translate_graph_to_sampler_with_bindings,
+};
 use aura_render::Sampler;
 use aura_sample::SampleRate;
+use aura_sequencing::{
+    beats_to_seconds, NoteEvent, Score, ScoreSignal, Semitone, Tempo, TimeSignature,
+};
 use imp_core_types::Graph;
 use thiserror::Error;
 
@@ -27,6 +34,8 @@ pub enum PlaybackPrepareError {
     Registry(#[from] RegistryError),
     #[error("{0}")]
     Translate(String),
+    #[error("invalid notation tempo: {0}")]
+    InvalidTempo(String),
 }
 
 /// Resolves the most-output node on an Imp graph (prefer id `out`).
@@ -83,4 +92,117 @@ pub fn prepare_session_playback(
     let sampler = translate_graph_to_sampler(&engine_graph, &registry, sample_rate)
         .map_err(|error| PlaybackPrepareError::Translate(error.to_string()))?;
     Ok((node_id, sampler))
+}
+
+/// Maps editor [`Notation`] onto engine [`Score`] (same ontology as generators).
+pub fn notation_to_score(notation: &Notation) -> Result<Score, PlaybackPrepareError> {
+    let tempo = Tempo::new(notation.tempo_bpm)
+        .map_err(|error| PlaybackPrepareError::InvalidTempo(error.to_string()))?;
+    let time_signature = TimeSignature {
+        beats_per_bar: notation.time_signature.beats_per_bar,
+        beat_unit: notation.time_signature.beat_unit,
+    };
+    let events = notation
+        .events
+        .iter()
+        .map(|note| {
+            NoteEvent::new(
+                Semitone(note.semitone),
+                note.start_beats,
+                note.duration_beats,
+            )
+            .with_velocity(note.velocity)
+        })
+        .collect();
+    Ok(Score::new(time_signature, tempo, events))
+}
+
+/// Converts parked playhead beats to absolute seconds at the notation tempo.
+pub fn playhead_start_secs(notation: &Notation, playhead_beats: f64) -> Result<f64, PlaybackPrepareError> {
+    let tempo = Tempo::new(notation.tempo_bpm)
+        .map_err(|error| PlaybackPrepareError::InvalidTempo(error.to_string()))?;
+    Ok(beats_to_seconds(playhead_beats.max(0.0), tempo))
+}
+
+/// Converts playback seconds back to beats at the notation tempo.
+pub fn secs_to_beats(notation: &Notation, secs: f64) -> Result<f64, PlaybackPrepareError> {
+    let tempo = Tempo::new(notation.tempo_bpm)
+        .map_err(|error| PlaybackPrepareError::InvalidTempo(error.to_string()))?;
+    let spb = tempo.seconds_per_beat();
+    if spb <= 0.0 {
+        return Ok(0.0);
+    }
+    Ok(secs / spb)
+}
+
+/// Builds a bound Imp audition graph: `external_score` → `poly_sine_score` → `out`.
+pub fn prepare_notation_playback(
+    notation: &Notation,
+    sample_rate: SampleRate,
+) -> Result<(Box<dyn Sampler>, f64), PlaybackPrepareError> {
+    let score = notation_to_score(notation)?;
+    let duration_secs = score.duration_secs().max(0.0);
+    let signal = ScoreSignal::finite(score);
+
+    let graph_json = r#"{
+  "nodes": {
+    "score": { "id": "score", "type": "external_score", "inputs": {} },
+    "clock": { "id": "clock", "type": "time", "inputs": {} },
+    "voice": { "id": "voice", "type": "poly_sine_score", "inputs": {} },
+    "out": { "id": "out", "type": "output", "inputs": {} }
+  },
+  "edges": {
+    "score_to_voice": {
+      "from": { "node": "score", "port": "score" },
+      "to": { "node": "voice", "port": "score" }
+    },
+    "time_to_voice": {
+      "from": { "node": "clock", "port": "time" },
+      "to": { "node": "voice", "port": "time" }
+    },
+    "voice_to_out": {
+      "from": { "node": "voice", "port": "audio" },
+      "to": { "node": "out", "port": "value" }
+    }
+  }
+}"#;
+
+    let engine_graph =
+        graph_from_json_str(graph_json).map_err(PlaybackPrepareError::Serialize)?;
+    let registry = aura_registry()?;
+    let bindings: BTreeMap<NodeId, ScoreSignal> =
+        BTreeMap::from([(String::from("score"), signal)]);
+    let sampler =
+        translate_graph_to_sampler_with_bindings(&engine_graph, &registry, sample_rate, &bindings)
+            .map_err(|error| PlaybackPrepareError::Translate(error.to_string()))?;
+    Ok((sampler, duration_secs))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aura_ext_notation::NotationNote;
+
+    #[test]
+    fn notation_to_score_maps_events() {
+        let mut notation = Notation::empty();
+        notation.events.push(NotationNote::new(60, 0.0, 0.5));
+        notation.events.push(NotationNote::new(64, 0.0, 0.5));
+        let score = notation_to_score(&notation).expect("score");
+        assert_eq!(score.events.len(), 2);
+        assert!((score.duration_beats() - 0.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn prepare_notation_playback_is_audible_and_pure() {
+        let mut notation = Notation::empty();
+        notation.events.push(NotationNote::new(60, 0.0, 0.5));
+        notation.events.push(NotationNote::new(64, 0.0, 0.5));
+        let (sampler, duration) =
+            prepare_notation_playback(&notation, SampleRate::RATE_44100).expect("prepare");
+        assert!(duration > 0.0);
+        let sample = sampler.at(0.05);
+        assert!(sample.abs() > 1e-4, "expected audible sample, got {sample}");
+        assert_eq!(sampler.at(0.05), sampler.at(0.05));
+    }
 }

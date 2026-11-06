@@ -342,6 +342,7 @@ dependencies = [
  "aura_io_cpal",
  "aura_render",
  "aura_sample",
+ "aura_sequencing",
  "directories",
  "iced",
  "iced_aw",

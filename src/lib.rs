@@ -52,18 +52,22 @@ pub use aura_interfaces::{
     VIEW_PIANO_ROLL,
 };
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use aura_io_cpal::PlaybackEngine;
 use aura_sample::SampleRate;
 use iced::keyboard::{self, Key, Modifiers};
 use iced::widget::{button, column, container, pick_list, row, text, Space};
-use iced::{Element, Fill, Subscription, Task};
+use iced::{time, Element, Fill, Subscription, Task};
 use tracing::warn;
 
 use crate::graph_view::graph_canvas;
-use crate::playback::prepare_session_playback;
+use crate::playback::{
+    playhead_start_secs, prepare_notation_playback, prepare_session_playback, secs_to_beats,
+};
 
 /// Root application state for the editor shell.
 #[derive(Debug)]
@@ -81,8 +85,12 @@ pub struct App {
     user_state: UserStateStore,
     /// Notation tool / snap prefs (persisted when enabled).
     piano_roll_ui: PianoRollUiState,
+    /// Parked playhead beats keyed by open notation document.
+    playheads: HashMap<DocumentId, f64>,
     /// CPAL stream owner for the active playback graph.
     playback: PlaybackEngine,
+    /// When set, auto-stop once playback position reaches this time (notation audition).
+    playback_end_secs: Option<f64>,
 }
 
 /// Messages produced by the multi-document shell.
@@ -123,6 +131,8 @@ pub enum Message {
         /// Destination path.
         path: PathBuf,
     },
+    /// Periodic tick while audio is playing (playhead redraw + end detection).
+    PlaybackTick,
 }
 
 impl From<PianoRollEdit> for Message {
@@ -167,7 +177,9 @@ impl App {
             extensions,
             user_state: UserStateStore::in_memory(),
             piano_roll_ui: PianoRollUiState::default(),
+            playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
+            playback_end_secs: None,
         }
     }
 
@@ -188,7 +200,9 @@ impl App {
             extensions,
             user_state,
             piano_roll_ui,
+            playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
+            playback_end_secs: None,
         };
         app.restore_open_documents();
         app
@@ -265,9 +279,9 @@ impl App {
         }
     }
 
-    /// Keyboard subscription: uncaptured key presses become [`Message::KeyInput`].
+    /// Keyboard subscription; while playing, also ticks for playhead + end detection.
     pub fn subscription(&self) -> Subscription<Message> {
-        keyboard::listen().filter_map(|event| match event {
+        let keys = keyboard::listen().filter_map(|event| match event {
             keyboard::Event::KeyPressed {
                 key,
                 modifiers,
@@ -275,7 +289,36 @@ impl App {
                 ..
             } => Some(Message::KeyInput { key, modifiers }),
             _ => None,
-        })
+        });
+        if self.playback.is_playing() {
+            let ticks = time::every(Duration::from_millis(33)).map(|_| Message::PlaybackTick);
+            Subscription::batch(vec![keys, ticks])
+        } else {
+            keys
+        }
+    }
+
+    /// Parked playhead beats for `document_id` (default 0).
+    pub fn parked_playhead_beats(&self, document_id: DocumentId) -> f64 {
+        self.playheads.get(&document_id).copied().unwrap_or(0.0)
+    }
+
+    /// Playhead beats to draw: live transport position while playing notation, else parked.
+    pub fn display_playhead_beats(&self) -> f64 {
+        let Some(doc) = self.documents.active_document() else {
+            return 0.0;
+        };
+        let parked = self.parked_playhead_beats(doc.id);
+        if !self.playback.is_playing() {
+            return parked;
+        }
+        let Some(notation) = doc.payload.notation() else {
+            return parked;
+        };
+        match secs_to_beats(notation, self.playback.position_secs()) {
+            Ok(beats) => beats,
+            Err(_) => parked,
+        }
     }
 
     /// Applies a message to application state.
@@ -312,11 +355,18 @@ impl App {
             Message::SelectTab(id) => {
                 self.documents.select(id);
                 self.piano_roll_ui.selected_note = None;
+                self.piano_roll_ui.playhead_beats = self.parked_playhead_beats(id);
                 return self.sync_open_documents_task();
             }
             Message::CloseTab(id) => {
                 self.documents.close(id);
+                self.playheads.remove(&id);
                 self.piano_roll_ui.selected_note = None;
+                self.piano_roll_ui.playhead_beats = self
+                    .documents
+                    .active_id()
+                    .map(|active| self.parked_playhead_beats(active))
+                    .unwrap_or(0.0);
                 return self.sync_open_documents_task();
             }
             Message::KeyInput { key, modifiers } => {
@@ -333,7 +383,13 @@ impl App {
                     CMD_DOCUMENT_CLOSE_ACTIVE => {
                         if let Some(id) = self.documents.active_id() {
                             self.documents.close(id);
+                            self.playheads.remove(&id);
                             self.piano_roll_ui.selected_note = None;
+                            self.piano_roll_ui.playhead_beats = self
+                                .documents
+                                .active_id()
+                                .map(|active| self.parked_playhead_beats(active))
+                                .unwrap_or(0.0);
                             return self.sync_open_documents_task();
                         }
                     }
@@ -391,21 +447,64 @@ impl App {
             Message::SaveToPath { document_id, path } => {
                 return self.write_notation_document(document_id, path);
             }
+            Message::PlaybackTick => {
+                if let Some(end) = self.playback_end_secs {
+                    if self.playback.position_secs() >= end {
+                        self.stop_playback();
+                    }
+                }
+            }
         }
         Task::none()
     }
 
     fn start_playback(&mut self) {
         let Some(doc) = self.documents.active_document() else {
-            self.status_notice = Some(String::from("Playback requires an open Imp graph"));
+            self.status_notice = Some(String::from("Playback requires an open document"));
             return;
         };
+        let sample_rate = SampleRate::RATE_44100;
+
+        if let Some(notation) = doc.payload.notation() {
+            let playhead_beats = self.parked_playhead_beats(doc.id);
+            let start_secs = match playhead_start_secs(notation, playhead_beats) {
+                Ok(secs) => secs,
+                Err(error) => {
+                    self.status_notice = Some(format!("Playback failed: {error}"));
+                    return;
+                }
+            };
+            let (sampler, duration_secs) =
+                match prepare_notation_playback(notation, sample_rate) {
+                    Ok(prepared) => prepared,
+                    Err(error) => {
+                        self.status_notice = Some(format!("Playback failed: {error}"));
+                        return;
+                    }
+                };
+            match self
+                .playback
+                .start_at(Arc::from(sampler), sample_rate, start_secs)
+            {
+                Ok(()) => {
+                    self.last_error = None;
+                    self.status_notice = None;
+                    self.playback_end_secs = Some(duration_secs.max(start_secs));
+                }
+                Err(error) => {
+                    self.status_notice = Some(format!("Playback failed: {error}"));
+                    self.playback_end_secs = None;
+                }
+            }
+            return;
+        }
+
         let Some(graph) = doc.payload.graph() else {
-            self.status_notice = Some(String::from("Playback requires an Imp graph tab"));
+            self.status_notice =
+                Some(String::from("Playback requires an Imp graph or notation tab"));
             return;
         };
         let neighbor_hint = doc.path.as_deref();
-        let sample_rate = SampleRate::RATE_44100;
 
         let sampler = match prepare_session_playback(graph, neighbor_hint, sample_rate) {
             Ok((_node_id, sampler)) => sampler,
@@ -419,15 +518,18 @@ impl App {
             Ok(()) => {
                 self.last_error = None;
                 self.status_notice = None;
+                self.playback_end_secs = None;
             }
             Err(error) => {
                 self.status_notice = Some(format!("Playback failed: {error}"));
+                self.playback_end_secs = None;
             }
         }
     }
 
     fn stop_playback(&mut self) {
         self.playback.stop();
+        self.playback_end_secs = None;
         if self
             .status_notice
             .as_deref()
@@ -443,8 +545,15 @@ impl App {
             | PianoRollEdit::Select { document_id, .. }
             | PianoRollEdit::MoveSelected { document_id, .. }
             | PianoRollEdit::ResizeSelected { document_id, .. }
-            | PianoRollEdit::Erase { document_id, .. } => *document_id,
+            | PianoRollEdit::Erase { document_id, .. }
+            | PianoRollEdit::SetPlayhead { document_id, .. } => *document_id,
         };
+
+        if let PianoRollEdit::SetPlayhead { beats, .. } = edit {
+            self.playheads.insert(document_id, beats.max(0.0));
+            self.piano_roll_ui.playhead_beats = beats.max(0.0);
+            return Task::none();
+        }
 
         if matches!(edit, PianoRollEdit::Select { .. }) {
             if let PianoRollEdit::Select { note_index, .. } = edit {
@@ -698,7 +807,12 @@ impl App {
                     )),
                 },
                 Some((role, VIEW_PIANO_ROLL)) => match doc.payload.notation() {
-                    Some(notation) => piano_roll_panel(doc.id, notation, &self.piano_roll_ui),
+                    Some(notation) => piano_roll_panel(
+                        doc.id,
+                        notation,
+                        &self.piano_roll_ui,
+                        self.display_playhead_beats(),
+                    ),
                     None => view_error_placeholder(format!(
                         "View `{VIEW_PIANO_ROLL}` requires a notation tip (role `{role}`)"
                     )),

@@ -26,7 +26,7 @@ impl Default for PianoRollUiEntry {
 }
 
 /// In-memory piano-roll UI state used by the host.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PianoRollUiState {
     /// Active modal tool.
     pub tool: NotationTool,
@@ -36,6 +36,8 @@ pub struct PianoRollUiState {
     pub snap_resolution: SnapResolution,
     /// Selected note index in the active notation, if any.
     pub selected_note: Option<usize>,
+    /// Parked playhead start position in beats (session-only; snaps back here on stop).
+    pub playhead_beats: f64,
 }
 
 impl Default for PianoRollUiState {
@@ -52,10 +54,11 @@ impl PianoRollUiState {
             snap_enabled: entry.snap_enabled,
             snap_resolution: SnapResolution::parse(&entry.snap_resolution).unwrap_or_default(),
             selected_note: None,
+            playhead_beats: 0.0,
         }
     }
 
-    /// Serializes prefs for user-state persistence (selection is session-only).
+    /// Serializes prefs for user-state persistence (selection/playhead are session-only).
     pub fn to_entry(&self) -> PianoRollUiEntry {
         PianoRollUiEntry {
             active_tool: self.tool.as_str().to_string(),

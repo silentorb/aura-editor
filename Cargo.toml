@@ -28,6 +28,7 @@ aura_integration = { path = "../aura-engine/crates/aura_integration" }
 aura_io_cpal = { path = "../aura-engine/crates/aura_io_cpal" }
 aura_render = { path = "../aura-engine/crates/aura_render" }
 aura_sample = { path = "../aura-engine/crates/aura_sample" }
+aura_sequencing = { path = "../aura-engine/crates/aura_sequencing" }
 directories = "6"
 iced = { version = "0.14", features = ["canvas", "tokio"] }
 iced_aw = { version = "0.14", default-features = false, features = ["menu"] }

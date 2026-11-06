@@ -29,6 +29,8 @@ const MAX_SCALE: f32 = 3.0;
 const DEFAULT_BEATS: f64 = 8.0;
 /// Screen-space hit width for note left/right resize edges.
 const EDGE_HIT_PX: f32 = 6.0;
+/// Fixed screen-space height of the playhead ruler strip above the grid.
+pub const RULER_HEIGHT: f32 = 20.0;
 
 /// Clamps canvas zoom.
 pub fn clamp_scale(scale: f32) -> f32 {
@@ -85,6 +87,13 @@ pub enum PianoRollEdit {
         /// Note index.
         note_index: usize,
     },
+    /// Park the playhead at a beat position (ruler click).
+    SetPlayhead {
+        /// Target document.
+        document_id: DocumentId,
+        /// Start position in beats.
+        beats: f64,
+    },
 }
 
 /// Which part of a note the cursor hit.
@@ -111,11 +120,18 @@ pub struct PianoRollView {
     snap_enabled: bool,
     snap_resolution: SnapResolution,
     selected_note: Option<usize>,
+    /// Playhead display position in beats (parked or live while playing).
+    playhead_beats: f64,
 }
 
 impl PianoRollView {
     /// Creates a piano-roll view for the active notation document.
-    pub fn new(document_id: DocumentId, notation: &Notation, ui: &PianoRollUiState) -> Self {
+    pub fn new(
+        document_id: DocumentId,
+        notation: &Notation,
+        ui: &PianoRollUiState,
+        playhead_beats: f64,
+    ) -> Self {
         Self {
             document_id,
             notation: notation.clone(),
@@ -123,6 +139,7 @@ impl PianoRollView {
             snap_enabled: ui.snap_enabled,
             snap_resolution: ui.snap_resolution,
             selected_note: ui.selected_note,
+            playhead_beats,
         }
     }
 
@@ -137,10 +154,20 @@ impl PianoRollView {
 
     fn world_from_cursor(&self, state: &GridState, local: Point) -> (f64, i16) {
         let x = (local.x - state.translation.x) / state.scale;
-        let y = (local.y - state.translation.y) / state.scale;
+        let y = (local.y - RULER_HEIGHT - state.translation.y) / state.scale;
         let beats = (x / PX_PER_BEAT) as f64;
         let semitone = PITCH_MAX - (y / PX_PER_SEMITONE).floor() as i16;
         (beats.max(0.0), semitone.clamp(PITCH_MIN, PITCH_MAX))
+    }
+
+    fn beats_from_ruler_cursor(&self, state: &GridState, local: Point) -> f64 {
+        let x = (local.x - state.translation.x) / state.scale;
+        let beats = (x / PX_PER_BEAT) as f64;
+        snap_beats(beats.max(0.0), self.snap_resolution.beats(), self.snap_enabled)
+    }
+
+    fn playhead_screen_x(&self, state: &GridState) -> f32 {
+        state.translation.x + (self.playhead_beats as f32) * PX_PER_BEAT * state.scale
     }
 
     fn note_at(&self, state: &GridState, local: Point) -> Option<usize> {
@@ -285,6 +312,14 @@ where
                 }
             }
             canvas::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                if cursor_in_bounds.y < RULER_HEIGHT {
+                    let beats = self.beats_from_ruler_cursor(state, cursor_in_bounds);
+                    let edit = PianoRollEdit::SetPlayhead {
+                        document_id: self.document_id,
+                        beats,
+                    };
+                    return Some(canvas::Action::publish(Message::from(edit)).and_capture());
+                }
                 match self.tool {
                     NotationTool::Draw => {
                         if self.note_at(state, cursor_in_bounds).is_some() {
@@ -454,6 +489,8 @@ where
         let note_fill = palette.primary.base.color;
         let note_selected = palette.primary.strong.color;
         let cursor_color = palette.background.base.text;
+        let ruler_fill = palette.background.strong.color;
+        let playhead_color = palette.danger.base.color;
 
         // Background
         frame.fill(
@@ -461,7 +498,13 @@ where
             palette.background.weak.color,
         );
 
-        frame.translate(state.translation);
+        // Screen-space ruler strip (playhead placement chrome).
+        frame.fill(
+            &Path::rectangle(Point::ORIGIN, Size::new(bounds.width, RULER_HEIGHT)),
+            ruler_fill,
+        );
+
+        frame.translate(Vector::new(state.translation.x, state.translation.y + RULER_HEIGHT));
         frame.scale(state.scale);
 
         let beats = self.content_beats();
@@ -516,17 +559,48 @@ where
 
         let mut geometries = vec![frame.into_geometry()];
 
+        // Playhead in screen space (through ruler + grid).
+        {
+            let mut playhead_frame = Frame::new(renderer, bounds.size());
+            let x = self.playhead_screen_x(state);
+            let stroke = Stroke::default().with_width(2.0).with_color(playhead_color);
+            playhead_frame.stroke(
+                &Path::line(Point::new(x, 0.0), Point::new(x, bounds.height)),
+                stroke,
+            );
+            // Ruler marker triangle tip.
+            let marker = Path::new(|builder| {
+                builder.move_to(Point::new(x, RULER_HEIGHT));
+                builder.line_to(Point::new(x - 5.0, 2.0));
+                builder.line_to(Point::new(x + 5.0, 2.0));
+                builder.close();
+            });
+            playhead_frame.fill(&marker, playhead_color);
+            geometries.push(playhead_frame.into_geometry());
+        }
+
         if state.pan_last.is_none() {
             if let Some(hotspot) = cursor.position_in(bounds) {
-                match self.tool {
-                    NotationTool::Draw => {
-                        geometries.push(draw_pen_cursor(renderer, bounds.size(), hotspot, cursor_color));
+                if hotspot.y >= RULER_HEIGHT {
+                    match self.tool {
+                        NotationTool::Draw => {
+                            geometries.push(draw_pen_cursor(
+                                renderer,
+                                bounds.size(),
+                                hotspot,
+                                cursor_color,
+                            ));
+                        }
+                        NotationTool::Erase => {
+                            geometries.push(draw_eraser_cursor(
+                                renderer,
+                                bounds.size(),
+                                hotspot,
+                                cursor_color,
+                            ));
+                        }
+                        NotationTool::Select => {}
                     }
-                    NotationTool::Erase => {
-                        geometries
-                            .push(draw_eraser_cursor(renderer, bounds.size(), hotspot, cursor_color));
-                    }
-                    NotationTool::Select => {}
                 }
             }
         }
@@ -723,16 +797,22 @@ pub fn piano_roll_panel<'a, Message>(
     document_id: DocumentId,
     notation: &'a Notation,
     ui: &PianoRollUiState,
+    playhead_beats: f64,
 ) -> Element<'a, Message>
 where
     Message: 'static + Clone + From<PianoRollEdit>,
 {
-    let grid = Canvas::new(PianoRollView::new(document_id, notation, ui))
-        .width(Fill)
-        .height(Fill);
+    let grid = Canvas::new(PianoRollView::new(
+        document_id,
+        notation,
+        ui,
+        playhead_beats,
+    ))
+    .width(Fill)
+    .height(Fill);
 
-    // Piano lane uses a fixed top margin matching the grid's default translation.
-    let piano = Canvas::new(PianoLaneView::new(8.0, 1.0))
+    // Piano lane top margin matches grid translation below the ruler strip.
+    let piano = Canvas::new(PianoLaneView::new(8.0 + RULER_HEIGHT, 1.0))
         .width(PIANO_WIDTH)
         .height(Fill);
 
@@ -761,7 +841,7 @@ pub fn apply_edit(notation: &mut Notation, edit: &PianoRollEdit) -> bool {
                 .push(NotationNote::new(*semitone, *start_beats, *duration_beats));
             true
         }
-        PianoRollEdit::Select { .. } => false,
+        PianoRollEdit::Select { .. } | PianoRollEdit::SetPlayhead { .. } => false,
         PianoRollEdit::MoveSelected {
             note_index,
             start_beats,
@@ -845,6 +925,6 @@ mod tests {
         let notation = Notation::empty();
         let ui = PianoRollUiState::default();
         let _: Element<'_, PianoRollEdit> =
-            piano_roll_panel(DocumentId::from_raw(1), &notation, &ui);
+            piano_roll_panel(DocumentId::from_raw(1), &notation, &ui, 0.0);
     }
 }

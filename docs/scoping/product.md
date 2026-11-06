@@ -29,9 +29,9 @@ Refined requirements live in [`../design/product.md`](../design/product.md), [`.
 
 Aura JSON files declare a root `type` and stack through document types (`json` → `aura-json` → …). Single-graph Imp files (`type: "imp-graph"` plus `nodes` / `edges`) are the first tip users open successfully. Multi-graph catalogs (`type: "imp-graph-library"`) are recognized then rejected until catalog open is designed.
 
-Hand-crafted notation lives in separate Aura JSON files (`type: "notation"`) with beat-grid note events. Users create, open, and save those documents in a piano-roll view (modal Draw / Select / Erase tools). The piano roll remains silent regarding its own events until notation wires into graphs; global Play can still preview an active Imp graph’s procedural audio.
+Hand-crafted notation lives in separate Aura JSON files (`type: "notation"`) with beat-grid note events. Users create, open, and save those documents in a piano-roll view (modal Draw / Select / Erase tools). Notation events are the same engine `Score` material procedural generators produce; Play from a piano-roll tab auditions them through the Imp sine voice path with a user-placed playhead.
 
-Open Imp graphs show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Node layout is automatic only — no freeform dragging of nodes on a canvas. Notation documents open into the piano-roll view. Start/Stop/Toggle (Space) streams the active Imp graph tab’s in-memory session graph (most-output node) through CPAL; saving is not required to play.
+Open Imp graphs show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Node layout is automatic only — no freeform dragging of nodes on a canvas. Notation documents open into the piano-roll view. Start/Stop/Toggle (Space) streams the active Imp graph tab through CPAL (from `t = 0`) or auditions the active notation tab from the parked playhead; saving is not required to play.
 
 ## Input and commands
 
@@ -43,6 +43,6 @@ Refined requirements: [`../design/input-bindings.md`](../design/input-bindings.m
 
 ## Open questions
 
-- How tightly notation wires into Imp graphs / engine `Score` at translate time (literal-score nodes vs editor-owned files lowered later)
+- Whether notation files later appear as first-class `score` sources inside user Imp graphs (beyond editor audition bindings)
 - How tightly the editor couples to aura-engine APIs versus file/CLI boundaries
 - Whether everyday authoring stays 1:1 graph-per-file or also embraces GraphLibrary catalogs as first-class multi-document sources

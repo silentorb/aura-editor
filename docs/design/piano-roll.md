@@ -6,7 +6,7 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 
 - Users can create and edit discrete note events on a time × pitch grid — a classic MIDI piano roll — without making destructive timeline editing the product’s center.
 - Notation is a **complement** to procedural Imp graphs: one plain-text Aura JSON file per notation document, composed later with other files like a programming project.
-- This slice does not audition notation events: global Play streams the active Imp graph tab’s in-memory procedural audio. Start from a piano-roll tip fails clearly until notation→graph wiring exists.
+- Editor notation is the same musical material procedural generators produce: an engine `Score` / `ScoreSignal`. Play from a piano-roll tab injects that score into the Imp voice path (`external_score` → `poly_sine_score` → output), sharing the Score ontology with `arpeggio` / `bass_line` / `drum_grid`.
 
 ## Document type
 
@@ -27,7 +27,7 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 ```
 
 - Pitch uses scientific notation labels with middle C = `C4` = semitone `60` (A4 = 69), matching Aura engine `Semitone` encoding.
-- Event fields align with engine `NoteEvent` / `Score` conceptually; the editor owns the serde schema in this slice (no engine serde dependency yet).
+- Event fields align with engine `NoteEvent` / `Score`; the editor owns the serde schema in this slice (no engine serde dependency yet).
 - Per-note `params` are omitted in v1; `velocity` defaults to `1.0` when absent.
 
 ## Create, open, and save
@@ -41,8 +41,16 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 
 - Content pane uses the `piano-roll` view when the tip role is `notation`.
 - Layout: left vertical piano lane (chromatic keys with labels such as `C4`, `D#3`); right time × pitch grid with note rectangles.
+- A fixed **ruler strip** sits at the top of the grid. Clicking the ruler parks the **playhead** (respecting snap). A vertical playhead line runs through the ruler and grid.
+- While Play is active, the playhead display advances with the CPAL sample clock; on Stop (or end of score) it snaps back to the parked start position.
 - Grid lines follow the active snap subdivision. Measure/bar awareness is deferred.
 - Default visible pitch band is approximately `C2`–`C6`, with pan/zoom of the grid viewport.
+
+## Playback
+
+- **Start** / **Stop** / **Toggle** (Play menu and Space) from a notation tab audition the open document’s events via the shared Score → Imp sine voice path, starting at the parked playhead time.
+- Playback auto-stops when the transport reaches the score duration; the playhead snaps back to its parked position.
+- Imp graph tabs keep the existing graph → CPAL path (from `t = 0`).
 
 ## Modal tools
 
@@ -56,7 +64,9 @@ Interaction is **tool-modal**: left-click / drag meaning depends on the active t
 
 Custom Draw/Erase cursors are canvas overlays (iced has no custom OS cursors). The pointer hotspot is fixed across tools; glyphs pivot around that hotspot so tool switches do not shift placement.
 
-Tool state is editor-global (not per document).
+Ruler clicks set the playhead regardless of the active tool.
+
+Tool state is editor-global (not per document). Playhead parking is session-only per open notation document.
 
 ## Snap
 
@@ -73,8 +83,8 @@ Tool state is editor-global (not per document).
 
 ## Non-goals / avoided approaches
 
-- Auditioning the open notation document’s events (no notation→graph wiring / playhead UI yet)
 - Measure / bar chrome and timing-division UI beyond the snap subdivision
-- Engine `aura_sequencing` serde or Imp literal-score nodes in this slice
+- Engine `aura_sequencing` serde for notation files (mapping is in-process today)
 - Making the piano roll the primary authoring model over Imp graphs
 - RMB-driven context menus for the three tools in v1
+- Scrub-while-dragging the playhead during playback (park + start only in this slice)
