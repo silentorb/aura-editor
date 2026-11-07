@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use aura_editor::{App, Bindings, Message};
+use aura_editor::{App, Bindings, GraphEdit, Message};
 use iced_test::simulator;
 
 fn fixture(name: &str) -> PathBuf {
@@ -37,7 +37,44 @@ fn default_shell_shows_dockable_panel_titles() {
         ui.find("Documents").is_ok(),
         "documents pane title should be visible"
     );
-    assert_eq!(app.shell_panes().len(), 3);
+    assert!(
+        ui.find("Properties").is_ok(),
+        "properties pane title should be visible"
+    );
+    assert_eq!(app.shell_panes().len(), 4);
+}
+
+#[test]
+fn properties_pane_shows_node_editors_when_selected() {
+    let mut app = test_app();
+    let _ = app.update(Message::OpenPath(fixture("sine.json")));
+    let id = app.documents().active_id().unwrap();
+
+    let mut ui = simulator(app.view());
+    assert!(
+        ui.find("Select a node to edit properties").is_ok(),
+        "empty properties state before selection"
+    );
+    assert!(
+        ui.find("Id:").is_err(),
+        "Id editor should not appear without a selected node"
+    );
+    drop(ui);
+
+    let _ = app.update(Message::Graph(GraphEdit::SelectNode {
+        document_id: id,
+        node_id: Some(String::from("freq")),
+    }));
+    assert_eq!(
+        app.graph_ui().selected_node.as_deref(),
+        Some("freq")
+    );
+
+    let mut ui = simulator(app.view());
+    assert!(ui.find("Node: freq").is_ok());
+    assert!(ui.find("Id:").is_ok(), "Properties should show Id label");
+    assert!(ui.find("Rename").is_ok(), "Properties should show Rename");
+    assert!(ui.find("Type:").is_ok(), "Properties should show Type label");
 }
 
 #[test]

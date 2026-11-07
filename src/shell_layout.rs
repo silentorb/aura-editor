@@ -1,11 +1,11 @@
-//! Dockable shell pane-grid layout (status / view-toolbar / documents).
+//! Dockable shell pane-grid layout (status / view-toolbar / documents / properties).
 
 use std::collections::HashSet;
 
 use iced::widget::pane_grid::{self, Axis, Configuration, Node, Pane};
 use serde::{Deserialize, Serialize};
 
-/// Stable ids for the three shell body panes.
+/// Stable ids for the shell body panes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ShellPanelId {
@@ -15,6 +15,8 @@ pub enum ShellPanelId {
     ViewToolbar,
     /// Document tabs + content pane.
     Documents,
+    /// Contextual properties inspector (graph node Id/Type in this slice).
+    Properties,
 }
 
 impl ShellPanelId {
@@ -24,12 +26,18 @@ impl ShellPanelId {
             Self::Status => "Status",
             Self::ViewToolbar => "Toolbar",
             Self::Documents => "Documents",
+            Self::Properties => "Properties",
         }
     }
 
     /// All panel ids in a stable order.
-    pub fn all() -> [Self; 3] {
-        [Self::Status, Self::ViewToolbar, Self::Documents]
+    pub fn all() -> [Self; 4] {
+        [
+            Self::Status,
+            Self::ViewToolbar,
+            Self::Documents,
+            Self::Properties,
+        ]
     }
 }
 
@@ -98,8 +106,11 @@ impl From<Axis> for ShellAxis {
     }
 }
 
-/// Supported `ShellLayoutEntry::version`.
-pub const SHELL_LAYOUT_ENTRY_VERSION: u32 = 1;
+/// Supported `ShellLayoutEntry::version` (after migration).
+pub const SHELL_LAYOUT_ENTRY_VERSION: u32 = 2;
+
+/// Prior three-pane layout version; migrated by inserting Properties.
+const SHELL_LAYOUT_ENTRY_VERSION_V1: u32 = 1;
 
 /// Default status split ratio (top strip).
 const DEFAULT_STATUS_RATIO: f32 = 0.08;
@@ -107,7 +118,10 @@ const DEFAULT_STATUS_RATIO: f32 = 0.08;
 /// Default toolbar split ratio within the remaining body.
 const DEFAULT_TOOLBAR_RATIO: f32 = 0.10;
 
-/// Builds the default pane-grid configuration (status → toolbar → documents).
+/// Default documents share of the documents|properties vertical split.
+const DEFAULT_DOCUMENTS_RATIO: f32 = 0.75;
+
+/// Builds the default pane-grid configuration (status → toolbar → documents|properties).
 pub fn default_configuration() -> Configuration<ShellPanelId> {
     Configuration::Split {
         axis: Axis::Horizontal,
@@ -117,7 +131,12 @@ pub fn default_configuration() -> Configuration<ShellPanelId> {
             axis: Axis::Horizontal,
             ratio: DEFAULT_TOOLBAR_RATIO,
             a: Box::new(Configuration::Pane(ShellPanelId::ViewToolbar)),
-            b: Box::new(Configuration::Pane(ShellPanelId::Documents)),
+            b: Box::new(Configuration::Split {
+                axis: Axis::Vertical,
+                ratio: DEFAULT_DOCUMENTS_RATIO,
+                a: Box::new(Configuration::Pane(ShellPanelId::Documents)),
+                b: Box::new(Configuration::Pane(ShellPanelId::Properties)),
+            }),
         }),
     }
 }
@@ -145,22 +164,35 @@ impl ShellLayoutEntry {
         })
     }
 
-    /// Validates the tree and builds pane-grid state, or returns [`None`] when invalid.
+    /// Validates the tree (migrating v1 when needed) and builds pane-grid state, or [`None`].
     pub fn try_into_state(&self) -> Option<pane_grid::State<ShellPanelId>> {
-        if self.version != SHELL_LAYOUT_ENTRY_VERSION {
-            return None;
-        }
-        if !self.tree.is_valid() {
+        let migrated = self.migrated()?;
+        if !migrated.tree.is_valid() {
             return None;
         }
         Some(pane_grid::State::with_configuration(
-            self.tree.to_configuration(),
+            migrated.tree.to_configuration(),
         ))
     }
 
     /// Like [`Self::try_into_state`], falling back to [`default_state`] on failure.
     pub fn into_state_or_default(&self) -> pane_grid::State<ShellPanelId> {
         self.try_into_state().unwrap_or_else(default_state)
+    }
+
+    /// Returns a v2 entry, migrating a valid v1 three-pane tree when needed.
+    fn migrated(&self) -> Option<Self> {
+        match self.version {
+            SHELL_LAYOUT_ENTRY_VERSION => Some(self.clone()),
+            SHELL_LAYOUT_ENTRY_VERSION_V1 => {
+                let tree = self.tree.migrate_v1_insert_properties()?;
+                Some(Self {
+                    version: SHELL_LAYOUT_ENTRY_VERSION,
+                    tree,
+                })
+            }
+            _ => None,
+        }
     }
 }
 
@@ -230,6 +262,53 @@ impl ShellLayoutTree {
             && ShellPanelId::all().iter().all(|id| seen.contains(id))
     }
 
+    /// True when the tree is a valid v1 layout (status, view-toolbar, documents exactly once).
+    fn is_valid_v1(&self) -> bool {
+        let mut seen = HashSet::new();
+        if !self.collect_panels(&mut seen) {
+            return false;
+        }
+        let v1 = [
+            ShellPanelId::Status,
+            ShellPanelId::ViewToolbar,
+            ShellPanelId::Documents,
+        ];
+        seen.len() == v1.len()
+            && v1.iter().all(|id| seen.contains(id))
+            && !seen.contains(&ShellPanelId::Properties)
+    }
+
+    /// Rewrites a v1 tree by replacing each `documents` leaf with documents|properties.
+    fn migrate_v1_insert_properties(&self) -> Option<Self> {
+        if !self.is_valid_v1() {
+            return None;
+        }
+        Some(self.replace_documents_with_docs_properties())
+    }
+
+    fn replace_documents_with_docs_properties(&self) -> Self {
+        match self {
+            Self::Pane(ShellPanelId::Documents) => Self::Split {
+                axis: ShellAxis::Vertical,
+                ratio: DEFAULT_DOCUMENTS_RATIO,
+                a: Box::new(Self::Pane(ShellPanelId::Documents)),
+                b: Box::new(Self::Pane(ShellPanelId::Properties)),
+            },
+            Self::Pane(id) => Self::Pane(*id),
+            Self::Split {
+                axis,
+                ratio,
+                a,
+                b,
+            } => Self::Split {
+                axis: *axis,
+                ratio: *ratio,
+                a: Box::new(a.replace_documents_with_docs_properties()),
+                b: Box::new(b.replace_documents_with_docs_properties()),
+            },
+        }
+    }
+
     fn collect_panels(&self, seen: &mut HashSet<ShellPanelId>) -> bool {
         match self {
             Self::Pane(id) => seen.insert(*id),
@@ -257,6 +336,20 @@ pub fn state_from_entry(entry: Option<&ShellLayoutEntry>) -> pane_grid::State<Sh
 mod tests {
     use super::*;
 
+    fn v1_default_tree() -> ShellLayoutTree {
+        ShellLayoutTree::Split {
+            axis: ShellAxis::Horizontal,
+            ratio: DEFAULT_STATUS_RATIO,
+            a: Box::new(ShellLayoutTree::Pane(ShellPanelId::Status)),
+            b: Box::new(ShellLayoutTree::Split {
+                axis: ShellAxis::Horizontal,
+                ratio: DEFAULT_TOOLBAR_RATIO,
+                a: Box::new(ShellLayoutTree::Pane(ShellPanelId::ViewToolbar)),
+                b: Box::new(ShellLayoutTree::Pane(ShellPanelId::Documents)),
+            }),
+        }
+    }
+
     #[test]
     fn default_tree_is_valid() {
         let entry = ShellLayoutEntry::default();
@@ -271,6 +364,7 @@ mod tests {
         let state = original.try_into_state().expect("default should load");
         let restored = ShellLayoutEntry::from_state(&state).expect("state should serialize");
         assert_eq!(restored.tree, original.tree);
+        assert_eq!(restored.version, SHELL_LAYOUT_ENTRY_VERSION);
     }
 
     #[test]
@@ -282,7 +376,8 @@ mod tests {
         assert!(entry.try_into_state().is_none());
         let state = entry.into_state_or_default();
         let panels: HashSet<_> = state.iter().map(|(_, id)| *id).collect();
-        assert_eq!(panels.len(), 3);
+        assert_eq!(panels.len(), 4);
+        assert!(panels.contains(&ShellPanelId::Properties));
     }
 
     #[test]
@@ -301,25 +396,46 @@ mod tests {
 
     #[test]
     fn unsupported_version_rejected() {
-        let mut entry = ShellLayoutEntry::default();
-        entry.version = 99;
+        let entry = ShellLayoutEntry {
+            version: 99,
+            ..ShellLayoutEntry::default()
+        };
         assert!(entry.try_into_state().is_none());
+    }
+
+    #[test]
+    fn v1_three_pane_tree_migrates_to_properties_on_right() {
+        let entry = ShellLayoutEntry {
+            version: SHELL_LAYOUT_ENTRY_VERSION_V1,
+            tree: v1_default_tree(),
+        };
+        let state = entry.try_into_state().expect("v1 should migrate");
+        let panels: HashSet<_> = state.iter().map(|(_, id)| *id).collect();
+        assert_eq!(panels.len(), 4);
+        assert!(panels.contains(&ShellPanelId::Properties));
+
+        let restored = ShellLayoutEntry::from_state(&state).expect("serialize migrated");
+        assert_eq!(
+            restored.tree,
+            ShellLayoutEntry::default().tree,
+            "default v1 stack should migrate to the v2 default"
+        );
     }
 
     #[test]
     fn entry_json_matches_documented_shape() {
         let entry = ShellLayoutEntry::default();
         let value = serde_json::to_value(&entry).expect("serialize");
-        assert_eq!(value["version"], 1);
+        assert_eq!(value["version"], 2);
         assert_eq!(value["tree"]["split"]["axis"], "horizontal");
         assert_eq!(value["tree"]["split"]["a"]["pane"], "status");
         assert_eq!(
             value["tree"]["split"]["b"]["split"]["a"]["pane"],
             "view-toolbar"
         );
-        assert_eq!(
-            value["tree"]["split"]["b"]["split"]["b"]["pane"],
-            "documents"
-        );
+        let docs_props = &value["tree"]["split"]["b"]["split"]["b"]["split"];
+        assert_eq!(docs_props["axis"], "vertical");
+        assert_eq!(docs_props["a"]["pane"], "documents");
+        assert_eq!(docs_props["b"]["pane"], "properties");
     }
 }

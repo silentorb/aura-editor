@@ -27,7 +27,7 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Imp graph documents support create, modify, and save in the `graph-dag` view (see [`graph-dag.md`](graph-dag.md)).
 - Notation documents support create, modify, and save (see [`piano-roll.md`](piano-roll.md)).
 - Open document paths and the active tab are restored from ephemeral user state under the Aura user directory (see [`user-state.md`](user-state.md)); untitled tabs and pan/zoom are not.
-- Shell body layout (status, view toolbar, and documents panes) is an Iced `pane_grid`: users may drag panes to rearrange and resize splits; the layout tree is persisted as user state (see [`user-state.md`](user-state.md)). The default arrangement matches the prior fixed vertical stack.
+- Shell body layout (status, view toolbar, documents, and properties panes) is an Iced `pane_grid`: users may drag panes to rearrange and resize splits; the layout tree is persisted as user state (see [`user-state.md`](user-state.md)). The default arrangement is a vertical stack of status → toolbar → (documents | properties), with Properties on the right of Documents.
 - Extensibility (commands, views, document types, and user-state) follows [`extensions.md`](extensions.md).
 
 ## Graph files
@@ -56,9 +56,10 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - The shell has a global **menu bar** with File / Edit / View / Play roots. The menu bar is fixed chrome above the dockable pane grid (not itself a rearrangeable pane).
 - File menu exposes document commands (Open, New notation, New graph, Save, Close). Edit and View are reserved for future global actions.
 - Play menu exposes transport commands (Start, Stop). Toggle playback is available as a command (default Space) and need not appear in the menu.
-- Below the menu, the shell body is three named panes in an Iced `pane_grid`: **status**, **view-toolbar**, and **documents**. Panes have title bars for drag rearrange; they are not closable or hideable in this slice. Split ratios are user-resizable.
+- Below the menu, the shell body is four named panes in an Iced `pane_grid`: **status**, **view-toolbar**, **documents**, and **properties**. Panes have title bars for drag rearrange; they are not closable or hideable in this slice. Split ratios are user-resizable.
 - The **view-toolbar** pane is always present; its body shows the active view’s tool strip (graph or piano-roll) when applicable, otherwise empty space. Menus in this slice are not contextual to the active view.
-- A global application toolbar, additional tool panes, floating windows, and per-view contextual menus are deferred.
+- The **properties** pane shows graph node Id/Type editors when a graph node is selected; otherwise an empty-state message. Full input-literal inspection remains out of scope (see [`graph-dag.md`](graph-dag.md)).
+- A global application toolbar, further tool panes, floating windows, closable docks, and per-view contextual menus are deferred.
 
 ## Playback
 
@@ -105,7 +106,7 @@ Repos and projects use kebab-case. Rust packages use snake_case (`aura_editor`).
 - Freeform manual node placement on a canvas (layout stays automatic)
 - Persisting pan/zoom camera per document across launches
 - Opening GraphLibrary catalogs as editor documents until that flow is designed
-- Full input-literal property inspector for graph nodes (rename + change type only in this slice)
+- Full input-literal property inspector for graph nodes (Properties pane: rename + change type only in this slice)
 - Continuous scrub of the playhead while audio is running (park + start only)
 - Explicit playback-node override / pinned target (Select playback node deferred; fringe cases TBD)
 - Fully abstracting persistence from Aura operation (paths remain optional library-discovery hints)

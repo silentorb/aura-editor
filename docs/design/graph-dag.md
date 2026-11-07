@@ -16,7 +16,7 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 
 | Tool | Behavior |
 |------|----------|
-| Select | Click a node or edge to select; click empty space clears selection. With a node selected, the toolbar exposes rename (id) and change type. Middle-button or empty-space drag pans; wheel zooms. |
+| Select | Click a node or edge to select; click empty space clears selection. With a node selected, the Properties pane exposes rename (id) and change type. Middle-button or empty-space drag pans; wheel zooms. |
 | Add | Click empty canvas inserts a node of the current Add type with a unique id; layout regenerates. |
 | Connect | Creates an edge according to the active connection mode (below). |
 | Erase | Click a node removes it and all incident edges. Click an edge removes that edge; in **Simple** mode a visual node→node line removes all edges between that pair. |
@@ -46,7 +46,7 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 ## Selection and update
 
 - Selection is session-only (not persisted).
-- **Update** in this slice means rename node id and change node type for the selected node. A full input-literal property inspector is out of scope.
+- **Update** in this slice means rename node id and change node type for the selected node in the shell **Properties** pane (not the view toolbar). A full input-literal property inspector is out of scope.
 
 ## Persistence of documents
 

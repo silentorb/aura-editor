@@ -115,7 +115,7 @@ pub struct App {
     playback: PlaybackEngine,
     /// When set, auto-stop once playback position reaches this time (notation audition).
     playback_end_secs: Option<f64>,
-    /// Dockable shell body panes (status / toolbar / documents).
+    /// Dockable shell body panes (status / toolbar / documents / properties).
     shell_panes: pane_grid::State<ShellPanelId>,
 }
 
@@ -165,7 +165,7 @@ pub enum Message {
     GraphAddTypeSelected(String),
     /// Connection mode from Graph view options.
     GraphConnectionModeSelected(ConnectionMode),
-    /// Rename buffer edited in the graph toolbar.
+    /// Rename buffer edited in the Properties pane.
     GraphRenameInput(String),
     /// Commit rename of the selected graph node.
     GraphRenameCommit,
@@ -1215,6 +1215,7 @@ impl App {
                 ShellPanelId::Documents => {
                     column![self.tab_bar(), self.document_panel()].spacing(0).into()
                 }
+                ShellPanelId::Properties => self.properties_pane(),
             };
             pane_grid::Content::new(body).title_bar(title)
         })
@@ -1279,11 +1280,11 @@ impl App {
         );
         let add_type = self.graph_ui.add_node_type.clone();
 
-        let mut left = row![
+        let left = row![
             button(select_label).on_press(Message::Command(CommandId::new(CMD_GRAPH_TOOL_SELECT))),
             button(add_label).on_press(Message::Command(CommandId::new(CMD_GRAPH_TOOL_ADD))),
             pick_list(
-                type_ids.clone(),
+                type_ids,
                 Some(add_type),
                 Message::GraphAddTypeSelected,
             ),
@@ -1292,31 +1293,6 @@ impl App {
             button(erase_label).on_press(Message::Command(CommandId::new(CMD_GRAPH_TOOL_ERASE))),
         ]
         .spacing(6);
-
-        if let Some(node_id) = &self.graph_ui.selected_node {
-            let selected_type = self
-                .documents
-                .active_document()
-                .and_then(|doc| doc.payload.graph())
-                .and_then(|graph| graph.nodes.get(node_id))
-                .map(|node| node.node_type.clone());
-            left = left.push(text("Id:"));
-            left = left.push(
-                text_input("node id", &self.graph_ui.rename_buffer)
-                    .on_input(Message::GraphRenameInput)
-                    .on_submit(Message::GraphRenameCommit)
-                    .width(Length::Fixed(120.0)),
-            );
-            left = left.push(
-                button("Rename").on_press(Message::GraphRenameCommit),
-            );
-            left = left.push(text("Type:"));
-            left = left.push(pick_list(
-                type_ids,
-                selected_type,
-                Message::GraphSelectedTypeChanged,
-            ));
-        }
 
         let mode_label = match self.graph_ui.connection_mode {
             ConnectionMode::Simple => "Simple",
@@ -1352,6 +1328,49 @@ impl App {
             .spacing(8)
             .align_y(iced::Alignment::Center)
             .into()
+    }
+
+    fn properties_pane(&self) -> Element<'_, Message> {
+        if !self.active_is_graph() {
+            return column![text("No graph selection")]
+                .spacing(8)
+                .padding(8)
+                .into();
+        }
+
+        let Some(node_id) = &self.graph_ui.selected_node else {
+            return column![text("Select a node to edit properties")]
+                .spacing(8)
+                .padding(8)
+                .into();
+        };
+
+        let type_ids = available_node_types(
+            self.documents
+                .active_document()
+                .and_then(|doc| doc.path.as_deref()),
+        );
+        let selected_type = self
+            .documents
+            .active_document()
+            .and_then(|doc| doc.payload.graph())
+            .and_then(|graph| graph.nodes.get(node_id))
+            .map(|node| node.node_type.clone());
+
+        column![
+            text(format!("Node: {node_id}")).size(14),
+            text("Id:"),
+            text_input("node id", &self.graph_ui.rename_buffer)
+                .on_input(Message::GraphRenameInput)
+                .on_submit(Message::GraphRenameCommit)
+                .width(Length::Fill),
+            button("Rename").on_press(Message::GraphRenameCommit),
+            text("Type:"),
+            pick_list(type_ids, selected_type, Message::GraphSelectedTypeChanged),
+        ]
+        .spacing(8)
+        .padding(8)
+        .into()
     }
 
     fn tab_bar(&self) -> Element<'_, Message> {

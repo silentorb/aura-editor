@@ -79,9 +79,10 @@ Declarative requirements for ephemeral Aura Editor user-state persistence. Produ
 ## Shell layout
 
 - Extension `aura-builtin` contributes entry `shell-layout` in bucket `shell`.
-- Entry shape: `version` (number, currently `1`) plus a recursive `tree` of either `{ "pane": "<id>" }` or `{ "split": { "axis": "horizontal" | "vertical", "ratio": number, "a": <tree>, "b": <tree> } }`.
-- Pane ids: `status`, `view-toolbar`, `documents`. A valid tree contains each id exactly once.
-- Default when missing/invalid: horizontal (top/bottom) stack status → view-toolbar → documents, with documents taking most of the height.
+- Entry shape: `version` (number, currently `2`) plus a recursive `tree` of either `{ "pane": "<id>" }` or `{ "split": { "axis": "horizontal" | "vertical", "ratio": number, "a": <tree>, "b": <tree> } }`.
+- Pane ids: `status`, `view-toolbar`, `documents`, `properties`. A valid v2 tree contains each id exactly once.
+- Default when missing/invalid: horizontal stack status → view-toolbar → (documents | properties), with Properties on the right of Documents (vertical split, documents ~0.75).
+- Version `1` trees that contain exactly the three prior panes (`status`, `view-toolbar`, `documents`) are migrated by replacing the `documents` leaf with a documents|properties vertical split (properties on the right at the default ratio), then treated as version `2`. Other unsupported versions fall back to the default.
 - Collect on pane drag-rearrange and split resize; apply once at startup when the component is enabled.
 - Do not persist iced widget objects; only the purpose-built tree. Closing or hiding panes is out of scope.
 
@@ -92,7 +93,7 @@ Declarative requirements for ephemeral Aura Editor user-state persistence. Produ
   "version": 1,
   "entries": {
     "shell-layout": {
-      "version": 1,
+      "version": 2,
       "tree": {
         "split": {
           "axis": "horizontal",
@@ -103,7 +104,14 @@ Declarative requirements for ephemeral Aura Editor user-state persistence. Produ
               "axis": "horizontal",
               "ratio": 0.1,
               "a": { "pane": "view-toolbar" },
-              "b": { "pane": "documents" }
+              "b": {
+                "split": {
+                  "axis": "vertical",
+                  "ratio": 0.75,
+                  "a": { "pane": "documents" },
+                  "b": { "pane": "properties" }
+                }
+              }
             }
           }
         }
