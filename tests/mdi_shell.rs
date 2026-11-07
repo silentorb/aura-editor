@@ -91,7 +91,7 @@ fn open_path_creates_tab_and_close_restores_empty_state() {
     assert!(app.last_error().is_none());
 
     let mut ui = simulator(app.view());
-    assert!(ui.find("[sine]").is_ok(), "active tab title should be visible");
+    assert!(ui.find("sine").is_ok(), "active tab title should be visible");
     assert!(ui.find("Ready").is_ok());
     drop(ui);
 

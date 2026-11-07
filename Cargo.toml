@@ -33,6 +33,7 @@ aura_sequencing = { path = "../aura-engine/crates/aura_sequencing" }
 directories = "6"
 iced = { version = "0.14", features = ["canvas", "tokio"] }
 iced_aw = { version = "0.14", default-features = false, features = ["menu"] }
+native-theme-iced = { version = "0.7", default-features = false, features = ["widgets", "native", "iced_aw", "system-fonts"] }
 tokio = { version = "1", features = ["time"] }
 imp_core_types = { path = "../imp-rs/crates/imp_core_types" }
 imp_graph_editor = { path = "crates/imp_graph_editor" }

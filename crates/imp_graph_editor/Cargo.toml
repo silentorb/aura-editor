@@ -9,6 +9,7 @@ repository = "https://github.com/silentorb/aura-editor"
 [dependencies]
 iced = { version = "0.14", features = ["canvas"] }
 imp_core_types = { path = "../../../imp-rs/crates/imp_core_types" }
+native-theme-iced = { version = "0.7", default-features = false, features = ["widgets"] }
 petgraph = "0.8"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -74,10 +74,15 @@ use aura_io_cpal::PlaybackEngine;
 use aura_sample::SampleRate;
 use iced::keyboard::{self, key::Named, Key, Modifiers};
 use iced::widget::{button, column, container, pane_grid, pick_list, row, text, Space};
-use iced::{time, Element, Fill, Subscription, Task};
+use iced::{time, Element, Fill, Renderer, Subscription, Task, Theme};
 use iced_aw::menu::{Menu, MenuBar};
 use iced_aw::menu_items;
-use tracing::warn;
+use native_theme_iced::{
+    at_least, button_content_min_size, button_padding, combo_box_padding, control_line_height,
+    font_size, from_preset, from_system, pick_list_handle, scaled_text_size, styles,
+    AccessibilityPreferences, ResolvedTheme,
+};
+use tracing::{info, warn};
 
 use crate::graph_catalog::RegistryCatalog;
 use crate::playback::{
@@ -111,6 +116,33 @@ pub struct App {
     playback_end_secs: Option<f64>,
     /// Dockable shell body panes (status / toolbar / documents / properties).
     shell_panes: pane_grid::State<ShellPanelId>,
+    /// Iced theme mapped from the OS or an Adwaita preset fallback.
+    pub theme: Theme,
+    /// Native-theme resolved metrics/colors for per-widget styles.
+    pub resolved: ResolvedTheme,
+    /// OS accessibility preferences (or defaults under a preset fallback).
+    pub accessibility: AccessibilityPreferences,
+}
+
+/// Loads the OS theme when available; otherwise Adwaita light.
+fn load_native_theme() -> (Theme, ResolvedTheme, AccessibilityPreferences) {
+    match from_system() {
+        Ok(loaded) => {
+            info!(mode = ?loaded.mode, "loaded native-theme-iced from system");
+            (loaded.theme, loaded.resolved, loaded.accessibility)
+        }
+        Err(error) => {
+            warn!(%error, "native-theme-iced from_system failed; falling back to adwaita light");
+            match from_preset("adwaita", false) {
+                Ok((theme, resolved)) => (theme, resolved, AccessibilityPreferences::default()),
+                Err(preset_error) => {
+                    panic!(
+                        "native-theme-iced fallback preset `adwaita` failed: {preset_error} (system: {error})"
+                    );
+                }
+            }
+        }
+    }
 }
 
 /// Messages produced by the multi-document shell.
@@ -202,6 +234,7 @@ impl App {
     ///
     /// Uses an in-memory user-state store (no disk I/O).
     pub fn with_extensions(extensions: ExtensionRuntime, bindings: Bindings) -> Self {
+        let (theme, resolved, accessibility) = load_native_theme();
         Self {
             documents: DocumentStore::default(),
             last_error: None,
@@ -215,6 +248,9 @@ impl App {
             playback: PlaybackEngine::new(),
             playback_end_secs: None,
             shell_panes: default_state(),
+            theme,
+            resolved,
+            accessibility,
         }
     }
 
@@ -229,6 +265,7 @@ impl App {
         let piano_roll_ui = restore_piano_roll_ui(&user_state, &extensions);
         let graph_ui = restore_graph_ui(&user_state, &extensions);
         let shell_panes = restore_shell_layout(&user_state, &extensions);
+        let (theme, resolved, accessibility) = load_native_theme();
         let mut app = Self {
             documents: DocumentStore::default(),
             last_error: None,
@@ -242,6 +279,9 @@ impl App {
             playback: PlaybackEngine::new(),
             playback_end_secs: None,
             shell_panes,
+            theme,
+            resolved,
+            accessibility,
         };
         app.restore_open_documents();
         app
@@ -1179,10 +1219,16 @@ impl App {
 
     /// Builds the multi-document shell view.
     pub fn view(&self) -> Element<'_, Message> {
+        let body_size = font_size(&self.resolved, &self.accessibility);
         let panes = pane_grid(&self.shell_panes, |_pane, panel_id, _maximized| {
-            let title = pane_grid::TitleBar::new(text(panel_id.title()).size(12)).padding(4);
+            let title = pane_grid::TitleBar::new(text(panel_id.title()).size(body_size))
+                .padding(4)
+                .style(styles::toolbar(&self.resolved));
             let body = match panel_id {
-                ShellPanelId::Status => row![text(self.status())].padding(8).into(),
+                ShellPanelId::Status => container(row![text(self.status()).size(body_size)])
+                    .padding(8)
+                    .style(styles::toolbar(&self.resolved))
+                    .into(),
                 ShellPanelId::ViewToolbar => self.view_toolbar_pane(),
                 ShellPanelId::Documents => {
                     column![self.tab_bar(), self.document_panel()].spacing(0).into()
@@ -1195,24 +1241,32 @@ impl App {
         .height(Fill)
         .spacing(4)
         .on_drag(Message::ShellPaneDragged)
-        .on_resize(8, Message::ShellPaneResized);
+        .on_resize(8, Message::ShellPaneResized)
+        .style(styles::pane_grid(&self.resolved));
 
-        column![menu_bar::global_menu_bar(), panes]
-            .spacing(0)
-            .into()
+        column![
+            menu_bar::global_menu_bar(&self.resolved, &self.accessibility),
+            panes
+        ]
+        .spacing(0)
+        .into()
     }
 
     fn view_toolbar_pane(&self) -> Element<'_, Message> {
-        if self
+        let content: Element<'_, Message> = if self
             .documents
             .active_document()
             .and_then(|doc| doc.payload.notation())
             .is_some()
         {
-            row![piano_roll_tool_bar(&self.piano_roll_ui)]
-                .spacing(6)
-                .padding([0, 8])
-                .into()
+            row![piano_roll_tool_bar(
+                &self.piano_roll_ui,
+                &self.resolved,
+                &self.accessibility
+            )]
+            .spacing(6)
+            .padding([0, 8])
+            .into()
         } else if self.active_is_graph() {
             row![self.graph_tool_bar()]
                 .spacing(6)
@@ -1220,7 +1274,11 @@ impl App {
                 .into()
         } else {
             row![].padding([0, 8]).into()
-        }
+        };
+        container(content)
+            .width(Fill)
+            .style(styles::toolbar(&self.resolved))
+            .into()
     }
 
     fn graph_tool_bar(&self) -> Element<'_, Message> {
@@ -1229,25 +1287,39 @@ impl App {
                 .active_document()
                 .and_then(|doc| doc.path.as_deref()),
         );
+        let body = font_size(&self.resolved, &self.accessibility);
         let left = row![
-            tool_strip(self.graph_ui.tool).map(Message::GraphChrome),
-            add_type_picker(type_ids, self.graph_ui.add_node_type.clone()).map(Message::GraphChrome),
+            tool_strip(self.graph_ui.tool, &self.resolved).map(Message::GraphChrome),
+            add_type_picker(
+                type_ids,
+                self.graph_ui.add_node_type.clone(),
+                &self.resolved,
+                &self.accessibility,
+            )
+            .map(Message::GraphChrome),
         ]
         .spacing(6);
 
         let precise_ports = self.graph_ui.connection_mode == ConnectionMode::Precise;
         let options_menu = Menu::new(menu_items!(
-            (precise_ports_checkbox(precise_ports).map(Message::GraphChrome)),
+            (precise_ports_checkbox(precise_ports, &self.resolved).map(Message::GraphChrome)),
         ))
         .max_width(220.0);
 
-        let options = MenuBar::new(menu_items!(
-            (button(text("Graph view options")), options_menu),
-        ))
+        let options = MenuBar::new(menu_items!((
+            button(at_least(
+                text("Graph view options").size(body),
+                button_content_min_size(&self.resolved),
+            ))
+            .padding(button_padding(&self.resolved))
+            .style(styles::button(&self.resolved)),
+            options_menu
+        )))
         .padding(0)
         .spacing(0)
         .close_on_item_click(true)
-        .close_on_background_click(true);
+        .close_on_background_click(true)
+        .style(styles::aw::menu(&self.resolved));
 
         row![left, Space::new().width(Fill), options]
             .spacing(8)
@@ -1256,18 +1328,21 @@ impl App {
     }
 
     fn properties_pane(&self) -> Element<'_, Message> {
+        let body = font_size(&self.resolved, &self.accessibility);
         if !self.active_is_graph() {
-            return column![text("No graph selection")]
-                .spacing(8)
+            return container(column![text("No graph selection").size(body)].spacing(8))
                 .padding(8)
+                .style(styles::toolbar(&self.resolved))
                 .into();
         }
 
         let Some(node_id) = &self.graph_ui.selected_node else {
-            return column![text("Select a node to edit properties")]
-                .spacing(8)
-                .padding(8)
-                .into();
+            return container(
+                column![text("Select a node to edit properties").size(body)].spacing(8),
+            )
+            .padding(8)
+            .style(styles::toolbar(&self.resolved))
+            .into();
         };
 
         let type_ids = available_node_types(
@@ -1282,15 +1357,20 @@ impl App {
             .and_then(|graph| graph.nodes.get(node_id))
             .map(|node| node.node_type.clone());
 
-        column![node_properties_editor(
-            node_id,
-            &self.graph_ui.rename_buffer,
-            type_ids,
-            selected_type,
+        container(
+            column![node_properties_editor(
+                node_id,
+                &self.graph_ui.rename_buffer,
+                type_ids,
+                selected_type,
+                &self.resolved,
+                &self.accessibility,
+            )
+            .map(Message::GraphChrome)]
+            .spacing(8),
         )
-        .map(Message::GraphChrome)]
-        .spacing(8)
         .padding(8)
+        .style(styles::toolbar(&self.resolved))
         .into()
     }
 
@@ -1299,27 +1379,39 @@ impl App {
             return Space::new().height(0).into();
         }
 
+        let body = font_size(&self.resolved, &self.accessibility);
         let mut tabs = row![].spacing(4).padding([0, 8]);
         for doc in self.documents.documents() {
             let active = self.documents.active_id() == Some(doc.id);
             let dirty = if doc.dirty { "*" } else { "" };
-            let label = if active {
-                format!("[{}{dirty}]", doc.title)
-            } else {
-                format!("{}{dirty}", doc.title)
-            };
+            let label = format!("{}{dirty}", doc.title);
             tabs = tabs.push(
                 row![
-                    button(text(label)).on_press(Message::SelectTab(doc.id)),
-                    button(text("×")).on_press(Message::CloseTab(doc.id)),
+                    button(at_least(
+                        text(label).size(body),
+                        button_content_min_size(&self.resolved),
+                    ))
+                    .on_press(Message::SelectTab(doc.id))
+                    .padding(button_padding(&self.resolved))
+                    .style(styles::button_toggle(&self.resolved, active)),
+                    button(at_least(
+                        text("×").size(body),
+                        button_content_min_size(&self.resolved),
+                    ))
+                    .on_press(Message::CloseTab(doc.id))
+                    .padding(button_padding(&self.resolved))
+                    .style(styles::button(&self.resolved)),
                 ]
                 .spacing(2),
             );
         }
-        tabs.into()
+        container(tabs)
+            .style(styles::toolbar(&self.resolved))
+            .into()
     }
 
     fn document_panel(&self) -> Element<'_, Message> {
+        let body = font_size(&self.resolved, &self.accessibility);
         let content: Element<'_, Message> = if let Some(doc) = self.documents.active_document()
         {
             match self.extensions.resolve_view_for_chain(&doc.roles) {
@@ -1331,9 +1423,12 @@ impl App {
                             move |edit| Message::Graph { document_id, edit },
                         )
                     }
-                    None => view_error_placeholder(format!(
-                        "View `{VIEW_GRAPH_DAG}` requires an Imp graph tip (role `{role}`)"
-                    )),
+                    None => view_error_placeholder(
+                        format!(
+                            "View `{VIEW_GRAPH_DAG}` requires an Imp graph tip (role `{role}`)"
+                        ),
+                        body,
+                    ),
                 },
                 Some((role, VIEW_PIANO_ROLL)) => match doc.payload.notation() {
                     Some(notation) => piano_roll_panel(
@@ -1342,13 +1437,17 @@ impl App {
                         &self.piano_roll_ui,
                         self.display_playhead_beats(),
                     ),
-                    None => view_error_placeholder(format!(
-                        "View `{VIEW_PIANO_ROLL}` requires a notation tip (role `{role}`)"
-                    )),
+                    None => view_error_placeholder(
+                        format!(
+                            "View `{VIEW_PIANO_ROLL}` requires a notation tip (role `{role}`)"
+                        ),
+                        body,
+                    ),
                 },
-                Some((role, other)) => view_error_placeholder(format!(
-                    "No host adapter for view `{other}` (role `{role}`)"
-                )),
+                Some((role, other)) => view_error_placeholder(
+                    format!("No host adapter for view `{other}` (role `{role}`)"),
+                    body,
+                ),
                 None => {
                     let hint = doc
                         .roles
@@ -1360,11 +1459,11 @@ impl App {
                         .unwrap_or_else(|| {
                             String::from("No enabled view for this document type chain")
                         });
-                    view_error_placeholder(hint)
+                    view_error_placeholder(hint, body)
                 }
             }
         } else {
-            container(text("Open a file or create a notation to begin"))
+            container(text("Open a file or create a notation to begin").size(body))
                 .center_x(Fill)
                 .center_y(Fill)
                 .width(Fill)
@@ -1380,39 +1479,52 @@ impl App {
     }
 }
 
-fn piano_roll_tool_bar(ui: &PianoRollUiState) -> Element<'_, Message> {
-    let draw_label = if ui.tool == NotationTool::Draw {
-        "[Draw]"
-    } else {
-        "Draw"
-    };
-    let select_label = if ui.tool == NotationTool::Select {
-        "[Select]"
-    } else {
-        "Select"
-    };
-    let erase_label = if ui.tool == NotationTool::Erase {
-        "[Erase]"
-    } else {
-        "Erase"
-    };
-    let snap_label = if ui.snap_enabled {
-        "[Snap]"
-    } else {
-        "Snap"
-    };
+fn piano_roll_tool_bar<'a>(
+    ui: &'a PianoRollUiState,
+    resolved: &'a ResolvedTheme,
+    accessibility: &'a AccessibilityPreferences,
+) -> Element<'a, Message> {
+    let body = font_size(resolved, accessibility);
+    let combo_size = scaled_text_size(resolved.combo_box.font.size, accessibility);
+    let combo_pad = combo_box_padding(resolved);
 
     row![
-        button(draw_label).on_press(Message::Command(CommandId::new(CMD_NOTATION_TOOL_DRAW))),
-        button(select_label).on_press(Message::Command(CommandId::new(CMD_NOTATION_TOOL_SELECT))),
-        button(erase_label).on_press(Message::Command(CommandId::new(CMD_NOTATION_TOOL_ERASE))),
-        button(snap_label).on_press(Message::Command(CommandId::new(CMD_NOTATION_SNAP_TOGGLE))),
-        text("Res:"),
+        button(at_least(text("Draw").size(body), button_content_min_size(resolved)))
+            .on_press(Message::Command(CommandId::new(CMD_NOTATION_TOOL_DRAW)))
+            .padding(button_padding(resolved))
+            .style(styles::button_toggle(resolved, ui.tool == NotationTool::Draw)),
+        button(at_least(text("Select").size(body), button_content_min_size(resolved)))
+            .on_press(Message::Command(CommandId::new(CMD_NOTATION_TOOL_SELECT)))
+            .padding(button_padding(resolved))
+            .style(styles::button_toggle(
+                resolved,
+                ui.tool == NotationTool::Select
+            )),
+        button(at_least(text("Erase").size(body), button_content_min_size(resolved)))
+            .on_press(Message::Command(CommandId::new(CMD_NOTATION_TOOL_ERASE)))
+            .padding(button_padding(resolved))
+            .style(styles::button_toggle(resolved, ui.tool == NotationTool::Erase)),
+        button(at_least(text("Snap").size(body), button_content_min_size(resolved)))
+            .on_press(Message::Command(CommandId::new(CMD_NOTATION_SNAP_TOGGLE)))
+            .padding(button_padding(resolved))
+            .style(styles::button_toggle(resolved, ui.snap_enabled)),
+        text("Res:").size(body),
         pick_list(
             SnapResolution::ALL.to_vec(),
             Some(ui.snap_resolution),
             Message::SnapResolutionSelected,
-        ),
+        )
+        .text_size(combo_size)
+        .padding(combo_pad)
+        .text_line_height(control_line_height(
+            resolved,
+            combo_size,
+            resolved.combo_box.min_height,
+            combo_pad,
+        ))
+        .handle(pick_list_handle::<Renderer>(resolved))
+        .style(styles::pick_list(resolved))
+        .menu_style(styles::menu(resolved)),
     ]
     .spacing(6)
     .into()
@@ -1525,8 +1637,8 @@ fn build_port_catalog(
     catalog
 }
 
-fn view_error_placeholder(message: String) -> Element<'static, Message> {
-    container(text(message))
+fn view_error_placeholder(message: String, body_size: f32) -> Element<'static, Message> {
+    container(text(message).size(body_size))
         .center_x(Fill)
         .center_y(Fill)
         .width(Fill)
