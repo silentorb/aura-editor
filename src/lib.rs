@@ -198,6 +198,12 @@ pub enum Message {
     ShellPaneDragged(pane_grid::DragEvent),
     /// Shell pane split resized.
     ShellPaneResized(pane_grid::ResizeEvent),
+    /// No-op press on interactive menu-bar roots.
+    ///
+    /// iced treats a `button` without `on_press` as `Status::Disabled` and fades
+    /// it. MenuBar opens menus itself, so roots still need a handler for enabled
+    /// Active/Hovered/Pressed styling.
+    MenuRoot,
 }
 
 impl From<PianoRollEdit> for Message {
@@ -608,6 +614,7 @@ impl App {
                 return self.sync_shell_layout_task();
             }
             Message::ShellPaneDragged(_) => {}
+            Message::MenuRoot => {}
             Message::ShellPaneResized(pane_grid::ResizeEvent { split, ratio }) => {
                 self.shell_panes.resize(split, ratio);
                 return self.sync_shell_layout_task();
@@ -1311,6 +1318,7 @@ impl App {
                 text("Graph view options").size(body),
                 button_content_min_size(&self.resolved),
             ))
+            .on_press(Message::MenuRoot)
             .padding(button_padding(&self.resolved))
             .style(styles::button(&self.resolved)),
             options_menu

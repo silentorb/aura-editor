@@ -37,11 +37,13 @@ fn menu_root<'a>(
     label: &'a str,
     resolved: &'a ResolvedTheme,
     body_size: f32,
+    on_press: Option<Message>,
 ) -> iced::widget::Button<'a, Message> {
     button(at_least(
         text(label).size(body_size),
         button_content_min_size(resolved),
     ))
+    .on_press_maybe(on_press)
     .padding(button_padding(resolved))
     .style(styles::button(resolved))
 }
@@ -80,11 +82,18 @@ pub fn global_menu_bar<'a>(
 
     // Edit / View stay as labeled roots until they have items. iced_aw panics on
     // empty Menu overlays (indexes into zero children), so do not attach empty menus.
+    // Interactive roots need a no-op on_press so iced does not paint them Disabled.
     MenuBar::new(menu_items!(
-        (menu_root("File", resolved, body), file_menu),
-        (menu_root("Edit", resolved, body)),
-        (menu_root("View", resolved, body)),
-        (menu_root("Play", resolved, body), play_menu),
+        (
+            menu_root("File", resolved, body, Some(Message::MenuRoot)),
+            file_menu
+        ),
+        (menu_root("Edit", resolved, body, None)),
+        (menu_root("View", resolved, body, None)),
+        (
+            menu_root("Play", resolved, body, Some(Message::MenuRoot)),
+            play_menu
+        ),
     ))
     .padding([4, 8])
     .spacing(4)
