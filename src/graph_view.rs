@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 
+use iced::alignment;
 use iced::mouse;
 use iced::widget::canvas::{self, path::Builder, Frame, Geometry, Path, Stroke, Text};
 use iced::widget::Canvas;
@@ -20,6 +21,12 @@ const PORT_RADIUS: f32 = 5.0;
 const PORT_HIT_RADIUS: f32 = 10.0;
 const PORT_SPACING: f32 = 18.0;
 const EDGE_HIT_DISTANCE: f32 = 8.0;
+/// Space reserved for node id + type above the port list in precise mode.
+const NODE_HEADER_HEIGHT: f32 = 40.0;
+/// Slightly wider than simple-mode boxes so input/output labels fit.
+const PRECISE_NODE_WIDTH: f32 = 168.0;
+const PORT_LABEL_GAP: f32 = 6.0;
+const PORT_LABEL_SIZE: f32 = 11.0;
 
 /// Input/output port ids for a node type instance.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -162,24 +169,15 @@ fn node_size_for(ports: Option<&NodePortInfo>, precise: bool) -> Size {
     if !precise {
         return NODE_SIZE;
     }
-    let Some(ports) = ports else {
-        return NODE_SIZE;
-    };
-    let rows = ports.inputs.len().max(ports.outputs.len()).max(1) as f32;
-    let height = (24.0 + rows * PORT_SPACING).max(NODE_SIZE.height);
-    Size::new(NODE_SIZE.width, height)
+    let rows = ports
+        .map(|ports| ports.inputs.len().max(ports.outputs.len()).max(1))
+        .unwrap_or(1) as f32;
+    let height = (NODE_HEADER_HEIGHT + rows * PORT_SPACING + 4.0).max(NODE_SIZE.height);
+    Size::new(PRECISE_NODE_WIDTH, height)
 }
 
-fn port_position(
-    node_pos: Point,
-    size: Size,
-    index: usize,
-    count: usize,
-    is_output: bool,
-) -> Point {
-    let span = (count.max(1) as f32) * PORT_SPACING;
-    let start_y = node_pos.y + (size.height - span) / 2.0 + PORT_SPACING / 2.0;
-    let y = start_y + index as f32 * PORT_SPACING;
+fn port_position(node_pos: Point, size: Size, index: usize, is_output: bool) -> Point {
+    let y = node_pos.y + NODE_HEADER_HEIGHT + PORT_SPACING / 2.0 + index as f32 * PORT_SPACING;
     let x = if is_output {
         node_pos.x + size.width
     } else {
@@ -299,13 +297,13 @@ impl GraphView {
             };
             let size = self.size_of(&node.id);
             for (index, port) in info.inputs.iter().enumerate() {
-                let pos = port_position(node.position, size, index, info.inputs.len(), false);
+                let pos = port_position(node.position, size, index, false);
                 if (pos.x - world.x).hypot(pos.y - world.y) <= PORT_HIT_RADIUS {
                     return Some((node.id.clone(), port.clone(), false));
                 }
             }
             for (index, port) in info.outputs.iter().enumerate() {
-                let pos = port_position(node.position, size, index, info.outputs.len(), true);
+                let pos = port_position(node.position, size, index, true);
                 if (pos.x - world.x).hypot(pos.y - world.y) <= PORT_HIT_RADIUS {
                     return Some((node.id.clone(), port.clone(), true));
                 }
@@ -323,7 +321,7 @@ impl GraphView {
         let start = if self.connection_mode == ConnectionMode::Precise {
             let info = self.ports.get(from)?;
             let index = info.outputs.iter().position(|p| p == from_port).unwrap_or(0);
-            port_position(from_node.position, from_size, index, info.outputs.len().max(1), true)
+            port_position(from_node.position, from_size, index, true)
         } else {
             Point::new(
                 from_node.position.x + from_size.width,
@@ -334,7 +332,7 @@ impl GraphView {
         let end = if self.connection_mode == ConnectionMode::Precise {
             let info = self.ports.get(to)?;
             let index = info.inputs.iter().position(|p| p == to_port).unwrap_or(0);
-            port_position(to_node.position, to_size, index, info.inputs.len().max(1), false)
+            port_position(to_node.position, to_size, index, false)
         } else {
             Point::new(
                 to_node.position.x,
@@ -715,17 +713,22 @@ where
 
             if self.connection_mode == ConnectionMode::Precise {
                 if let Some(info) = self.ports.get(&node.id) {
-                    for (index, _) in info.inputs.iter().enumerate() {
-                        let pos =
-                            port_position(node.position, size, index, info.inputs.len(), false);
-                        frame.fill(
-                            &Path::circle(pos, PORT_RADIUS),
-                            port_fill,
-                        );
+                    for (index, port) in info.inputs.iter().enumerate() {
+                        let pos = port_position(node.position, size, index, false);
+                        frame.fill(&Path::circle(pos, PORT_RADIUS), port_fill);
+                        frame.fill_text(Text {
+                            content: port.clone(),
+                            position: Point::new(pos.x + PORT_RADIUS + PORT_LABEL_GAP, pos.y),
+                            color: muted_text,
+                            size: Pixels(PORT_LABEL_SIZE),
+                            font: Font::DEFAULT,
+                            align_x: alignment::Horizontal::Left.into(),
+                            align_y: alignment::Vertical::Center,
+                            ..Text::default()
+                        });
                     }
-                    for (index, _) in info.outputs.iter().enumerate() {
-                        let pos =
-                            port_position(node.position, size, index, info.outputs.len(), true);
+                    for (index, port) in info.outputs.iter().enumerate() {
+                        let pos = port_position(node.position, size, index, true);
                         frame.fill(
                             &Path::circle(pos, PORT_RADIUS),
                             Color {
@@ -733,6 +736,16 @@ where
                                 ..port_fill
                             },
                         );
+                        frame.fill_text(Text {
+                            content: port.clone(),
+                            position: Point::new(pos.x - PORT_RADIUS - PORT_LABEL_GAP, pos.y),
+                            color: muted_text,
+                            size: Pixels(PORT_LABEL_SIZE),
+                            font: Font::DEFAULT,
+                            align_x: alignment::Horizontal::Right.into(),
+                            align_y: alignment::Vertical::Center,
+                            ..Text::default()
+                        });
                     }
                 }
             }

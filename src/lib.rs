@@ -77,7 +77,7 @@ use aura_io_cpal::PlaybackEngine;
 use aura_sample::SampleRate;
 use iced::keyboard::{self, key::Named, Key, Modifiers};
 use iced::widget::{
-    button, column, container, pane_grid, pick_list, row, text, text_input, Space,
+    button, checkbox, column, container, pane_grid, pick_list, row, text, text_input, Space,
 };
 use iced::{time, Element, Fill, Length, Subscription, Task};
 use iced_aw::menu::{Menu, MenuBar};
@@ -1294,24 +1294,17 @@ impl App {
         ]
         .spacing(6);
 
-        let mode_label = match self.graph_ui.connection_mode {
-            ConnectionMode::Simple => "Simple",
-            ConnectionMode::Precise => "Precise",
-        };
+        let precise_ports = self.graph_ui.connection_mode == ConnectionMode::Precise;
         let options_menu = Menu::new(menu_items!(
-            (button(text(format!("Connection: {mode_label} (toggle)")).width(Length::Fill))
-                .on_press(Message::GraphConnectionModeSelected(
-                    match self.graph_ui.connection_mode {
-                        ConnectionMode::Simple => ConnectionMode::Precise,
-                        ConnectionMode::Precise => ConnectionMode::Simple,
-                    },
-                ))
-                .width(Length::Fill)),
-            (button(text("Simple").width(Length::Fill))
-                .on_press(Message::GraphConnectionModeSelected(ConnectionMode::Simple))
-                .width(Length::Fill)),
-            (button(text("Precise").width(Length::Fill))
-                .on_press(Message::GraphConnectionModeSelected(ConnectionMode::Precise))
+            (checkbox(precise_ports)
+                .label("Precise ports")
+                .on_toggle(|enabled| {
+                    Message::GraphConnectionModeSelected(if enabled {
+                        ConnectionMode::Precise
+                    } else {
+                        ConnectionMode::Simple
+                    })
+                })
                 .width(Length::Fill)),
         ))
         .max_width(220.0);

@@ -24,8 +24,8 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 ## Connection modes
 
 - **Simple**: edges are drawn node-to-node (ports ignored for display). Connecting clicks a source node then a target node; the editor auto-pairs an unused compatible output→input from the node-type registry. If no pair exists, the action fails with a status message.
-- **Precise**: nodes show input ports (left) and output ports (right). Connecting drags from an output handle to an input handle. Edge endpoints attach to the chosen ports. Node height grows with `max(inputs, outputs)` when ports are shown.
-- Connection mode is global across graph tabs and is chosen from **Graph view options**.
+- **Precise**: nodes show labeled port lists — input ports (left) and output ports (right), each as a circle with its port id beside it. Connecting drags from an output handle to an input handle. Edge endpoints attach to the chosen ports. Node height grows with `max(inputs, outputs)` when ports are shown.
+- Connection mode is global across graph tabs and is toggled from **Graph view options** via a **Precise ports** checkbox (checked = Precise, unchecked = Simple).
 
 ### Auto-pair rules (Simple)
 
@@ -41,7 +41,7 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 ```
 
 - **Add ▾** lists node types from the playback registry; choosing a type sets the Add type and activates Add.
-- **Graph view options ▾** (far right) holds global view prefs. First option group: Connection mode → Simple / Precise. More options may join later without relocating the control.
+- **Graph view options ▾** (far right) holds global view prefs. First control: **Precise ports** checkbox toggle. More options may join later without relocating the control.
 
 ## Selection and update
 
