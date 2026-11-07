@@ -8,6 +8,12 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 - Users create, select, rename, retype, and delete nodes, and create or delete connections, on an automatically laid-out Canvas.
 - Layout remains automatic (petgraph layered). Edits regenerate layout. Freeform node placement is not supported.
 
+## Implementation crate
+
+- Canvas, layout, pure edit helpers, UI prefs state, and lightweight toolbar/properties **building blocks** live in the Aura-free workspace crate `imp_graph_editor`.
+- Aura Editor hosts compose those blocks into the product toolbar, Properties pane, menus, commands, Aura JSON save format, and Aura node-type registry wiring.
+- `imp_graph_editor` must not depend on `aura_*` crates, so a future extract into a separate Imp editor repo stays mostly packaging.
+
 ## Tools
 
 - Modal tools live on the per-view toolbar: **Select**, **Add**, **Connect**, **Erase**.

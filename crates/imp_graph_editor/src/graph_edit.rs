@@ -2,9 +2,25 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use aura_imp::{get_node_type, Registry};
 use imp_core_types::{Edge, Graph, Node, NodeId, PortReference};
 use thiserror::Error;
+
+/// Port template used for auto-pairing (host supplies opaque signal keys).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogPort {
+    /// Port id.
+    pub id: String,
+    /// Host-defined key; equal keys are treated as compatible signal types.
+    pub signal_key: String,
+}
+
+/// Host-injected lookup for node-type ports (keeps Imp type crates out of the trait API).
+pub trait NodeTypeCatalog {
+    /// Input ports for `node_type_id`, if the type is known.
+    fn inputs(&self, node_type_id: &str) -> Option<Vec<CatalogPort>>;
+    /// Output ports for `node_type_id`, if the type is known.
+    fn outputs(&self, node_type_id: &str) -> Option<Vec<CatalogPort>>;
+}
 
 /// Errors from graph edit helpers.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -209,7 +225,7 @@ pub fn remove_edges_between(graph: &mut Graph, a: &str, b: &str) -> usize {
 
 /// Picks an unused compatible output→input port pair for a simple connection.
 pub fn auto_pair_ports(
-    registry: &Registry,
+    catalog: &impl NodeTypeCatalog,
     graph: &Graph,
     from_node: &str,
     to_node: &str,
@@ -223,9 +239,11 @@ pub fn auto_pair_ports(
         .get(to_node)
         .ok_or_else(|| GraphEditError::NodeMissing(to_node.to_string()))?;
 
-    let from_def = get_node_type(registry, &from.node_type)
+    let outputs = catalog
+        .outputs(&from.node_type)
         .ok_or_else(|| GraphEditError::UnknownType(from.node_type.clone()))?;
-    let to_def = get_node_type(registry, &to.node_type)
+    let inputs = catalog
+        .inputs(&to.node_type)
         .ok_or_else(|| GraphEditError::UnknownType(to.node_type.clone()))?;
 
     let used_inputs: HashSet<&str> = graph
@@ -235,24 +253,22 @@ pub fn auto_pair_ports(
         .map(|edge| edge.to.port.as_str())
         .collect();
 
-    let outputs: Vec<_> = from_def.outputs.values().collect();
-    let inputs: Vec<_> = to_def
-        .inputs
-        .values()
+    let free_inputs: Vec<&CatalogPort> = inputs
+        .iter()
         .filter(|port| !used_inputs.contains(port.id.as_str()))
         .collect();
 
-    // Prefer matching signal types.
+    // Prefer matching signal keys.
     for out in &outputs {
-        for inp in &inputs {
-            if out.signal_type == inp.signal_type {
+        for inp in &free_inputs {
+            if out.signal_key == inp.signal_key {
                 return Ok((out.id.clone(), inp.id.clone()));
             }
         }
     }
 
     // Otherwise first free pair.
-    if let (Some(out), Some(inp)) = (outputs.first(), inputs.first()) {
+    if let (Some(out), Some(inp)) = (outputs.first(), free_inputs.first()) {
         return Ok((out.id.clone(), inp.id.clone()));
     }
 
@@ -262,22 +278,44 @@ pub fn auto_pair_ports(
     })
 }
 
-/// Serializes an Imp graph as pretty Aura JSON with `type: "imp-graph"`.
-pub fn graph_to_aura_json(graph: &Graph) -> Result<String, serde_json::Error> {
-    let mut value = serde_json::to_value(graph)?;
-    if let serde_json::Value::Object(map) = &mut value {
-        map.insert(
-            "type".into(),
-            serde_json::Value::String(String::from("imp-graph")),
-        );
-    }
-    serde_json::to_string_pretty(&value)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aura_imp::aura_registry;
+    use std::collections::BTreeMap;
+
+    struct StubCatalog {
+        inputs: BTreeMap<String, Vec<CatalogPort>>,
+        outputs: BTreeMap<String, Vec<CatalogPort>>,
+    }
+
+    impl NodeTypeCatalog for StubCatalog {
+        fn inputs(&self, node_type_id: &str) -> Option<Vec<CatalogPort>> {
+            self.inputs.get(node_type_id).cloned()
+        }
+
+        fn outputs(&self, node_type_id: &str) -> Option<Vec<CatalogPort>> {
+            self.outputs.get(node_type_id).cloned()
+        }
+    }
+
+    fn port(id: &str, signal_key: &str) -> CatalogPort {
+        CatalogPort {
+            id: id.into(),
+            signal_key: signal_key.into(),
+        }
+    }
+
+    fn stub_catalog() -> StubCatalog {
+        let mut inputs = BTreeMap::new();
+        let mut outputs = BTreeMap::new();
+        outputs.insert("parameter".into(), vec![port("value", "Sample")]);
+        inputs.insert(
+            "sine".into(),
+            vec![port("frequency", "Sample"), port("time", "Time")],
+        );
+        outputs.insert("sine".into(), vec![port("signal", "Sample")]);
+        StubCatalog { inputs, outputs }
+    }
 
     fn empty_graph() -> Graph {
         Graph {
@@ -321,12 +359,12 @@ mod tests {
 
     #[test]
     fn auto_pair_prefers_matching_types() {
-        let registry = aura_registry().expect("aura registry");
+        let catalog = stub_catalog();
         let mut graph = empty_graph();
         add_node(&mut graph, "freq", "parameter").unwrap();
         add_node(&mut graph, "osc", "sine").unwrap();
         let (from_port, to_port) =
-            auto_pair_ports(&registry, &graph, "freq", "osc").expect("pair");
+            auto_pair_ports(&catalog, &graph, "freq", "osc").expect("pair");
         assert_eq!(from_port, "value");
         assert_eq!(to_port, "frequency");
     }
@@ -340,14 +378,5 @@ mod tests {
         add_edge(&mut graph, "a", "value", "b", "time").unwrap();
         assert_eq!(remove_edges_between(&mut graph, "a", "b"), 2);
         assert!(graph.edges.is_empty());
-    }
-
-    #[test]
-    fn graph_to_aura_json_sets_type() {
-        let graph = empty_graph();
-        let json = graph_to_aura_json(&graph).unwrap();
-        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
-        assert_eq!(value["type"], "imp-graph");
-        assert!(value.get("nodes").is_some());
     }
 }

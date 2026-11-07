@@ -8,7 +8,6 @@ use iced::widget::canvas::{self, path::Builder, Frame, Geometry, Path, Stroke, T
 use iced::widget::Canvas;
 use iced::{Color, Element, Fill, Font, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector};
 
-use crate::document::DocumentId;
 use crate::graph_layout::{layout_graph, GraphLayout, NODE_SIZE};
 use crate::graph_ui::{ConnectionMode, GraphTool, GraphUiState};
 use imp_core_types::{EdgeId, Graph, NodeId};
@@ -45,27 +44,18 @@ pub type PortCatalog = BTreeMap<NodeId, NodePortInfo>;
 pub enum GraphEdit {
     /// Select a node (or clear when `None`).
     SelectNode {
-        /// Document being edited.
-        document_id: DocumentId,
         /// Node id, or `None` to clear.
         node_id: Option<String>,
     },
     /// Select an edge (or clear when `None`).
     SelectEdge {
-        /// Document being edited.
-        document_id: DocumentId,
         /// Edge id, or `None` to clear.
         edge_id: Option<String>,
     },
     /// Insert a node of the current Add type.
-    AddNode {
-        /// Document being edited.
-        document_id: DocumentId,
-    },
+    AddNode,
     /// Simple-mode connect between two nodes.
     ConnectNodes {
-        /// Document being edited.
-        document_id: DocumentId,
         /// Source node.
         from: String,
         /// Target node.
@@ -73,8 +63,6 @@ pub enum GraphEdit {
     },
     /// Precise-mode connect between ports.
     ConnectPorts {
-        /// Document being edited.
-        document_id: DocumentId,
         /// Source node.
         from_node: String,
         /// Source output port.
@@ -86,36 +74,25 @@ pub enum GraphEdit {
     },
     /// Begin a connect gesture.
     BeginConnect {
-        /// Document being edited.
-        document_id: DocumentId,
         /// Source node.
         from_node: String,
         /// Source port when precise.
         from_port: Option<String>,
     },
     /// Cancel an in-progress connect.
-    CancelConnect {
-        /// Document being edited.
-        document_id: DocumentId,
-    },
+    CancelConnect,
     /// Erase a node and incident edges.
     EraseNode {
-        /// Document being edited.
-        document_id: DocumentId,
         /// Node to remove.
         node_id: String,
     },
     /// Erase a single edge by id.
     EraseEdge {
-        /// Document being edited.
-        document_id: DocumentId,
         /// Edge to remove.
         edge_id: String,
     },
     /// Erase all edges between two nodes (simple-mode line).
     EraseEdgesBetween {
-        /// Document being edited.
-        document_id: DocumentId,
         /// One endpoint.
         a: String,
         /// Other endpoint.
@@ -191,7 +168,6 @@ fn port_position(node_pos: Point, size: Size, index: usize, is_output: bool) -> 
 pub struct GraphView {
     layout: GraphLayout,
     document_key: u64,
-    document_id: DocumentId,
     tool: GraphTool,
     connection_mode: ConnectionMode,
     selected_node: Option<String>,
@@ -204,9 +180,9 @@ pub struct GraphView {
 }
 
 impl GraphView {
-    /// Creates a view for `graph` belonging to `document_id`.
+    /// Creates a view for `graph` keyed by `document_key` (host session identity).
     pub fn new(
-        document_id: DocumentId,
+        document_key: u64,
         graph: &Graph,
         ui: &GraphUiState,
         ports: PortCatalog,
@@ -226,8 +202,7 @@ impl GraphView {
             .collect();
         Self {
             layout: layout_graph(graph),
-            document_key: document_id.get(),
-            document_id,
+            document_key,
             tool: ui.tool,
             connection_mode: ui.connection_mode,
             selected_node: ui.selected_node.clone(),
@@ -383,23 +358,19 @@ impl GraphView {
     }
 
     fn handle_click(&self, world: Point) -> Option<GraphEdit> {
-        let document_id = self.document_id;
         match self.tool {
             GraphTool::Select => {
                 if let Some(node) = self.hit_node(world) {
                     return Some(GraphEdit::SelectNode {
-                        document_id,
                         node_id: Some(node),
                     });
                 }
                 if let Some((edge_id, _, _)) = self.hit_edge(world) {
                     return Some(GraphEdit::SelectEdge {
-                        document_id,
                         edge_id: Some(edge_id),
                     });
                 }
                 Some(GraphEdit::SelectNode {
-                    document_id,
                     node_id: None,
                 })
             }
@@ -407,14 +378,13 @@ impl GraphView {
                 if self.hit_node(world).is_some() || self.hit_edge(world).is_some() {
                     return None;
                 }
-                Some(GraphEdit::AddNode { document_id })
+                Some(GraphEdit::AddNode)
             }
             GraphTool::Connect => {
                 if self.connection_mode == ConnectionMode::Precise {
                     if let Some((node, port, is_output)) = self.hit_port(world) {
                         if is_output {
                             return Some(GraphEdit::BeginConnect {
-                                document_id,
                                 from_node: node,
                                 from_port: Some(port),
                             });
@@ -423,7 +393,6 @@ impl GraphView {
                             (&self.connect_from_node, &self.connect_from_port)
                         {
                             return Some(GraphEdit::ConnectPorts {
-                                document_id,
                                 from_node: from_node.clone(),
                                 from_port: from_port.clone(),
                                 to_node: node,
@@ -431,25 +400,23 @@ impl GraphView {
                             });
                         }
                     }
-                    return Some(GraphEdit::CancelConnect { document_id });
+                    return Some(GraphEdit::CancelConnect);
                 }
 
                 // Simple: click source then target.
                 let Some(node) = self.hit_node(world) else {
-                    return Some(GraphEdit::CancelConnect { document_id });
+                    return Some(GraphEdit::CancelConnect);
                 };
                 if let Some(from) = &self.connect_from_node {
                     if from == &node {
-                        return Some(GraphEdit::CancelConnect { document_id });
+                        return Some(GraphEdit::CancelConnect);
                     }
                     return Some(GraphEdit::ConnectNodes {
-                        document_id,
                         from: from.clone(),
                         to: node,
                     });
                 }
                 Some(GraphEdit::BeginConnect {
-                    document_id,
                     from_node: node,
                     from_port: None,
                 })
@@ -457,20 +424,17 @@ impl GraphView {
             GraphTool::Erase => {
                 if let Some(node) = self.hit_node(world) {
                     return Some(GraphEdit::EraseNode {
-                        document_id,
                         node_id: node,
                     });
                 }
                 if let Some((edge_id, a, b)) = self.hit_edge(world) {
                     if self.connection_mode == ConnectionMode::Simple {
                         return Some(GraphEdit::EraseEdgesBetween {
-                            document_id,
                             a,
                             b,
                         });
                     }
                     return Some(GraphEdit::EraseEdge {
-                        document_id,
                         edge_id,
                     });
                 }
@@ -517,7 +481,7 @@ impl Default for ViewState {
 
 /// Builds a fill-sized canvas for the active graph document.
 pub fn graph_canvas<'a, Message>(
-    document_id: DocumentId,
+    document_key: u64,
     graph: &'a Graph,
     ui: &'a GraphUiState,
     ports: PortCatalog,
@@ -525,7 +489,7 @@ pub fn graph_canvas<'a, Message>(
 where
     Message: 'a + Clone + From<GraphEdit>,
 {
-    Canvas::new(GraphView::new(document_id, graph, ui, ports))
+    Canvas::new(GraphView::new(document_key, graph, ui, ports))
         .width(Fill)
         .height(Fill)
         .into()

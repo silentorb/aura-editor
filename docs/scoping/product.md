@@ -33,6 +33,8 @@ Hand-crafted notation lives in separate Aura JSON files (`type: "notation"`) wit
 
 Open Imp graphs show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Users edit nodes and connections with modal Select / Add / Connect / Erase tools; connection UI toggles between simple node→node wiring and precise port handles. Node layout is automatic only — no freeform dragging of nodes on a canvas. Users may create and save Imp graph documents as well as notation. Notation documents open into the piano-roll view. Start/Stop/Toggle (Space) streams the active Imp graph tab through CPAL (from `t = 0`) or auditions the active notation tab from the parked playhead; saving is not required to play.
 
+The Imp graph-dag surface is intentionally isolated in the Aura-free `imp_graph_editor` crate (canvas, edit helpers, chrome building blocks) so it can later move to a separate Imp editor repo if reused outside Aura; Aura Editor remains the host that completes the product UX.
+
 Refined graph-view requirements: [`../design/graph-dag.md`](../design/graph-dag.md).
 
 ## Input and commands

@@ -348,7 +348,7 @@ dependencies = [
  "iced_aw",
  "iced_test",
  "imp_core_types 0.5.0",
- "petgraph",
+ "imp_graph_editor",
  "rfd",
  "serde",
  "serde_json",
@@ -2026,6 +2026,18 @@ name = "imp_core_types"
 version = "0.5.0"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "imp_graph_editor"
+version = "0.1.0"
+dependencies = [
+ "iced",
+ "imp_core_types 0.5.0",
+ "petgraph",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]

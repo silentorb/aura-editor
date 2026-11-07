@@ -3,15 +3,13 @@
 //! Keeps Iced application logic out of `main` so unit and headless functional
 //! tests can exercise state and view without opening a real window.
 
+mod aura_graph_json;
 mod bindings;
 mod command;
 mod document;
 mod extensions;
-mod graph_edit;
+mod graph_catalog;
 mod graph_file;
-mod graph_layout;
-mod graph_ui;
-mod graph_view;
 mod logging;
 mod menu_bar;
 mod piano_roll;
@@ -29,16 +27,15 @@ pub use extensions::{
     register_linked_extensions, ExtensionRuntime, RegistrationHost, StackedOpen, UserStateBinding,
     DEFAULT_EXTENSIONS_JSON,
 };
-pub use graph_edit::{
-    add_edge, add_node, auto_pair_ports, graph_to_aura_json, remove_edge, remove_edges_between,
-    remove_node, rename_node, set_node_type, unique_node_id, GraphEditError,
-};
+pub use aura_graph_json::graph_to_aura_json;
 pub use graph_file::OpenError;
-pub use graph_layout::{layout_graph, GraphLayout, LaidOutNode};
-pub use graph_ui::{ConnectionMode, GraphTool, GraphUiEntry, GraphUiState};
-pub use graph_view::{
-    center_translation, clamp_scale, pan_by, zoom_at_point, GraphEdit, GraphView, NodePortInfo,
-    PortCatalog,
+pub use imp_graph_editor::{
+    add_edge, add_node, add_type_picker, auto_pair_ports, center_translation, clamp_scale,
+    graph_canvas, layout_graph, node_properties_editor, pan_by, precise_ports_checkbox,
+    remove_edge, remove_edges_between, remove_node, rename_node, set_node_type, tool_strip,
+    unique_node_id, zoom_at_point, ConnectionMode, GraphChromeMessage, GraphEdit, GraphEditError,
+    CatalogPort, ConnectDraft, GraphLayout, GraphTool, GraphUiEntry, GraphUiState, GraphView,
+    LaidOutNode, NodePortInfo, NodeTypeCatalog, PortCatalog,
 };
 pub use logging::init_logging;
 pub use piano_roll_ui::{PianoRollUiEntry, PianoRollUiState};
@@ -76,16 +73,13 @@ use aura_imp::{aura_registry, get_node_type, list_node_types};
 use aura_io_cpal::PlaybackEngine;
 use aura_sample::SampleRate;
 use iced::keyboard::{self, key::Named, Key, Modifiers};
-use iced::widget::{
-    button, checkbox, column, container, pane_grid, pick_list, row, text, text_input, Space,
-};
-use iced::{time, Element, Fill, Length, Subscription, Task};
+use iced::widget::{button, column, container, pane_grid, pick_list, row, text, Space};
+use iced::{time, Element, Fill, Subscription, Task};
 use iced_aw::menu::{Menu, MenuBar};
 use iced_aw::menu_items;
 use tracing::warn;
 
-use crate::graph_ui::ConnectDraft;
-use crate::graph_view::graph_canvas;
+use crate::graph_catalog::RegistryCatalog;
 use crate::playback::{
     playback_registry, playhead_start_secs, prepare_notation_playback, prepare_session_playback,
     secs_to_beats,
@@ -159,18 +153,15 @@ pub enum Message {
     },
     /// Periodic tick while audio is playing (playhead redraw + end detection).
     PlaybackTick,
-    /// Graph-dag canvas edit.
-    Graph(GraphEdit),
-    /// Node type chosen for the Add tool.
-    GraphAddTypeSelected(String),
-    /// Connection mode from Graph view options.
-    GraphConnectionModeSelected(ConnectionMode),
-    /// Rename buffer edited in the Properties pane.
-    GraphRenameInput(String),
-    /// Commit rename of the selected graph node.
-    GraphRenameCommit,
-    /// Change type of the selected graph node.
-    GraphSelectedTypeChanged(String),
+    /// Graph-dag canvas edit for a document.
+    Graph {
+        /// Document being edited.
+        document_id: DocumentId,
+        /// Canvas edit event.
+        edit: GraphEdit,
+    },
+    /// Chrome building-block message from graph toolbar/properties.
+    GraphChrome(GraphChromeMessage),
     /// Shell pane drag / drop.
     ShellPaneDragged(pane_grid::DragEvent),
     /// Shell pane split resized.
@@ -180,12 +171,6 @@ pub enum Message {
 impl From<PianoRollEdit> for Message {
     fn from(edit: PianoRollEdit) -> Self {
         Self::PianoRoll(edit)
-    }
-}
-
-impl From<GraphEdit> for Message {
-    fn from(edit: GraphEdit) -> Self {
-        Self::Graph(edit)
     }
 }
 
@@ -225,7 +210,7 @@ impl App {
             extensions,
             user_state: UserStateStore::in_memory(),
             piano_roll_ui: PianoRollUiState::default(),
-            graph_ui: GraphUiState::default(),
+            graph_ui: GraphUiState::new("sine"),
             playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
             playback_end_secs: None,
@@ -572,28 +557,11 @@ impl App {
                     }
                 }
             }
-            Message::Graph(edit) => {
-                return self.apply_graph_edit(edit);
+            Message::Graph { document_id, edit } => {
+                return self.apply_graph_edit(document_id, edit);
             }
-            Message::GraphAddTypeSelected(node_type) => {
-                self.graph_ui.add_node_type = node_type;
-                self.graph_ui.tool = GraphTool::Add;
-                self.graph_ui.connect_draft = None;
-                return self.sync_graph_ui_task();
-            }
-            Message::GraphConnectionModeSelected(mode) => {
-                self.graph_ui.connection_mode = mode;
-                self.graph_ui.connect_draft = None;
-                return self.sync_graph_ui_task();
-            }
-            Message::GraphRenameInput(value) => {
-                self.graph_ui.rename_buffer = value;
-            }
-            Message::GraphRenameCommit => {
-                return self.commit_graph_rename();
-            }
-            Message::GraphSelectedTypeChanged(node_type) => {
-                return self.change_selected_node_type(node_type);
+            Message::GraphChrome(chrome) => {
+                return self.apply_graph_chrome(chrome);
             }
             Message::ShellPaneDragged(pane_grid::DragEvent::Dropped { pane, target }) => {
                 self.shell_panes.drop(pane, target);
@@ -818,27 +786,52 @@ impl App {
         self.schedule_user_state_flush(generation)
     }
 
-    fn apply_graph_edit(&mut self, edit: GraphEdit) -> Task<Message> {
+    fn apply_graph_chrome(&mut self, chrome: GraphChromeMessage) -> Task<Message> {
+        match chrome {
+            GraphChromeMessage::SetTool(tool) => {
+                self.graph_ui.tool = tool;
+                self.graph_ui.connect_draft = None;
+                return self.sync_graph_ui_task();
+            }
+            GraphChromeMessage::SetAddNodeType(node_type) => {
+                self.graph_ui.add_node_type = node_type;
+                self.graph_ui.tool = GraphTool::Add;
+                self.graph_ui.connect_draft = None;
+                return self.sync_graph_ui_task();
+            }
+            GraphChromeMessage::SetConnectionMode(mode) => {
+                self.graph_ui.connection_mode = mode;
+                self.graph_ui.connect_draft = None;
+                return self.sync_graph_ui_task();
+            }
+            GraphChromeMessage::RenameInput(value) => {
+                self.graph_ui.rename_buffer = value;
+            }
+            GraphChromeMessage::RenameCommit => {
+                return self.commit_graph_rename();
+            }
+            GraphChromeMessage::SelectedTypeChanged(node_type) => {
+                return self.change_selected_node_type(node_type);
+            }
+        }
+        Task::none()
+    }
+
+    fn apply_graph_edit(&mut self, document_id: DocumentId, edit: GraphEdit) -> Task<Message> {
         match edit {
-            GraphEdit::SelectNode {
-                document_id,
-                node_id,
-            } => {
+            GraphEdit::SelectNode { node_id } => {
                 if self.documents.active_id() != Some(document_id) {
                     return Task::none();
                 }
                 self.graph_ui.select_node(node_id);
             }
-            GraphEdit::SelectEdge {
-                document_id,
-                edge_id,
-            } => {
+            GraphEdit::SelectEdge { edge_id } => {
                 if self.documents.active_id() != Some(document_id) {
                     return Task::none();
                 }
                 self.graph_ui.select_edge(edge_id);
             }
-            GraphEdit::AddNode { document_id } => {
+            GraphEdit::AddNode => {
                 let Some(doc) = self.documents.get_mut(document_id) else {
                     return Task::none();
                 };
@@ -856,7 +849,6 @@ impl App {
                 self.graph_ui.select_node(Some(id));
             }
             GraphEdit::BeginConnect {
-                document_id,
                 from_node,
                 from_port,
             } => {
@@ -868,16 +860,12 @@ impl App {
                     from_port,
                 });
             }
-            GraphEdit::CancelConnect { document_id } => {
+            GraphEdit::CancelConnect => {
                 if self.documents.active_id() == Some(document_id) {
                     self.graph_ui.connect_draft = None;
                 }
             }
-            GraphEdit::ConnectNodes {
-                document_id,
-                from,
-                to,
-            } => {
+            GraphEdit::ConnectNodes { from, to } => {
                 let neighbor = self
                     .documents
                     .get_mut(document_id)
@@ -890,13 +878,14 @@ impl App {
                         return Task::none();
                     }
                 };
+                let catalog = RegistryCatalog(&registry);
                 let Some(doc) = self.documents.get_mut(document_id) else {
                     return Task::none();
                 };
                 let Some(graph) = doc.payload.graph_mut() else {
                     return Task::none();
                 };
-                match auto_pair_ports(&registry, graph, &from, &to) {
+                match auto_pair_ports(&catalog, graph, &from, &to) {
                     Ok((from_port, to_port)) => {
                         if let Err(error) = add_edge(graph, from, from_port, to, to_port) {
                             self.status_notice = Some(error.to_string());
@@ -912,7 +901,6 @@ impl App {
                 self.graph_ui.connect_draft = None;
             }
             GraphEdit::ConnectPorts {
-                document_id,
                 from_node,
                 from_port,
                 to_node,
@@ -932,10 +920,7 @@ impl App {
                 }
                 self.graph_ui.connect_draft = None;
             }
-            GraphEdit::EraseNode {
-                document_id,
-                node_id,
-            } => {
+            GraphEdit::EraseNode { node_id } => {
                 let Some(doc) = self.documents.get_mut(document_id) else {
                     return Task::none();
                 };
@@ -952,10 +937,7 @@ impl App {
                     }
                 }
             }
-            GraphEdit::EraseEdge {
-                document_id,
-                edge_id,
-            } => {
+            GraphEdit::EraseEdge { edge_id } => {
                 let Some(doc) = self.documents.get_mut(document_id) else {
                     return Task::none();
                 };
@@ -972,11 +954,7 @@ impl App {
                     }
                 }
             }
-            GraphEdit::EraseEdgesBetween {
-                document_id,
-                a,
-                b,
-            } => {
+            GraphEdit::EraseEdgesBetween { a, b } => {
                 let Some(doc) = self.documents.get_mut(document_id) else {
                     return Task::none();
                 };
@@ -1003,16 +981,10 @@ impl App {
         }
         let document_id = doc.id;
         if let Some(node_id) = self.graph_ui.selected_node.clone() {
-            return self.apply_graph_edit(GraphEdit::EraseNode {
-                document_id,
-                node_id,
-            });
+            return self.apply_graph_edit(document_id, GraphEdit::EraseNode { node_id });
         }
         if let Some(edge_id) = self.graph_ui.selected_edge.clone() {
-            return self.apply_graph_edit(GraphEdit::EraseEdge {
-                document_id,
-                edge_id,
-            });
+            return self.apply_graph_edit(document_id, GraphEdit::EraseEdge { edge_id });
         }
         Task::none()
     }
@@ -1252,60 +1224,20 @@ impl App {
     }
 
     fn graph_tool_bar(&self) -> Element<'_, Message> {
-        let select_label = if self.graph_ui.tool == GraphTool::Select {
-            "[Select]"
-        } else {
-            "Select"
-        };
-        let add_label = if self.graph_ui.tool == GraphTool::Add {
-            "[Add]"
-        } else {
-            "Add"
-        };
-        let connect_label = if self.graph_ui.tool == GraphTool::Connect {
-            "[Connect]"
-        } else {
-            "Connect"
-        };
-        let erase_label = if self.graph_ui.tool == GraphTool::Erase {
-            "[Erase]"
-        } else {
-            "Erase"
-        };
-
         let type_ids = available_node_types(
             self.documents
                 .active_document()
                 .and_then(|doc| doc.path.as_deref()),
         );
-        let add_type = self.graph_ui.add_node_type.clone();
-
         let left = row![
-            button(select_label).on_press(Message::Command(CommandId::new(CMD_GRAPH_TOOL_SELECT))),
-            button(add_label).on_press(Message::Command(CommandId::new(CMD_GRAPH_TOOL_ADD))),
-            pick_list(
-                type_ids,
-                Some(add_type),
-                Message::GraphAddTypeSelected,
-            ),
-            button(connect_label)
-                .on_press(Message::Command(CommandId::new(CMD_GRAPH_TOOL_CONNECT))),
-            button(erase_label).on_press(Message::Command(CommandId::new(CMD_GRAPH_TOOL_ERASE))),
+            tool_strip(self.graph_ui.tool).map(Message::GraphChrome),
+            add_type_picker(type_ids, self.graph_ui.add_node_type.clone()).map(Message::GraphChrome),
         ]
         .spacing(6);
 
         let precise_ports = self.graph_ui.connection_mode == ConnectionMode::Precise;
         let options_menu = Menu::new(menu_items!(
-            (checkbox(precise_ports)
-                .label("Precise ports")
-                .on_toggle(|enabled| {
-                    Message::GraphConnectionModeSelected(if enabled {
-                        ConnectionMode::Precise
-                    } else {
-                        ConnectionMode::Simple
-                    })
-                })
-                .width(Length::Fill)),
+            (precise_ports_checkbox(precise_ports).map(Message::GraphChrome)),
         ))
         .max_width(220.0);
 
@@ -1350,17 +1282,13 @@ impl App {
             .and_then(|graph| graph.nodes.get(node_id))
             .map(|node| node.node_type.clone());
 
-        column![
-            text(format!("Node: {node_id}")).size(14),
-            text("Id:"),
-            text_input("node id", &self.graph_ui.rename_buffer)
-                .on_input(Message::GraphRenameInput)
-                .on_submit(Message::GraphRenameCommit)
-                .width(Length::Fill),
-            button("Rename").on_press(Message::GraphRenameCommit),
-            text("Type:"),
-            pick_list(type_ids, selected_type, Message::GraphSelectedTypeChanged),
-        ]
+        column![node_properties_editor(
+            node_id,
+            &self.graph_ui.rename_buffer,
+            type_ids,
+            selected_type,
+        )
+        .map(Message::GraphChrome)]
         .spacing(8)
         .padding(8)
         .into()
@@ -1398,7 +1326,10 @@ impl App {
                 Some((role, VIEW_GRAPH_DAG)) => match doc.payload.graph() {
                     Some(graph) => {
                         let ports = build_port_catalog(graph, doc.path.as_deref());
-                        graph_canvas(doc.id, graph, &self.graph_ui, ports)
+                        let document_id = doc.id;
+                        graph_canvas(document_id.get(), graph, &self.graph_ui, ports).map(
+                            move |edit| Message::Graph { document_id, edit },
+                        )
                     }
                     None => view_error_placeholder(format!(
                         "View `{VIEW_GRAPH_DAG}` requires an Imp graph tip (role `{role}`)"
@@ -1505,17 +1436,18 @@ fn restore_piano_roll_ui(
 }
 
 fn restore_graph_ui(store: &UserStateStore, extensions: &ExtensionRuntime) -> GraphUiState {
+    let default_add = "sine";
     let Some(binding) = extensions
         .user_state_bindings()
         .iter()
         .find(|binding| binding.entry_id == USER_STATE_GRAPH_DAG_UI)
     else {
-        return GraphUiState::default();
+        return GraphUiState::new(default_add);
     };
     store
         .get_entry::<GraphUiEntry>(&binding.bucket, &binding.entry_id)
-        .map(|entry| GraphUiState::from_entry(&entry))
-        .unwrap_or_default()
+        .map(|entry| GraphUiState::from_entry(&entry, default_add))
+        .unwrap_or_else(|| GraphUiState::new(default_add))
 }
 
 fn restore_shell_layout(

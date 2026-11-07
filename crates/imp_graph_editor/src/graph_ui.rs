@@ -1,4 +1,4 @@
-//! Persisted graph-dag tool / connection-mode preferences.
+//! Graph-dag tool / connection-mode preferences.
 
 use serde::{Deserialize, Serialize};
 
@@ -68,7 +68,7 @@ impl ConnectionMode {
     }
 }
 
-/// User-state entry for graph-dag UI prefs (`graph-dag-ui`).
+/// Serializable prefs entry for graph-dag UI (host chooses persistence key).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphUiEntry {
@@ -80,12 +80,13 @@ pub struct GraphUiEntry {
     pub add_node_type: String,
 }
 
-impl Default for GraphUiEntry {
-    fn default() -> Self {
+impl GraphUiEntry {
+    /// Builds an entry with Select/Simple and the host's default Add type.
+    pub fn new(default_add_type: impl Into<String>) -> Self {
         Self {
             active_tool: GraphTool::Select.as_str().to_string(),
             connection_mode: ConnectionMode::Simple.as_str().to_string(),
-            add_node_type: String::from("sine"),
+            add_node_type: default_add_type.into(),
         }
     }
 }
@@ -118,19 +119,21 @@ pub struct GraphUiState {
     pub rename_buffer: String,
 }
 
-impl Default for GraphUiState {
-    fn default() -> Self {
-        Self::from_entry(&GraphUiEntry::default())
-    }
-}
-
 impl GraphUiState {
-    /// Builds state from a persisted entry (invalid fields fall back to defaults).
-    pub fn from_entry(entry: &GraphUiEntry) -> Self {
+    /// Builds state with Select/Simple and the host's default Add type.
+    pub fn new(default_add_type: impl Into<String>) -> Self {
+        let default_add_type = default_add_type.into();
+        Self::from_entry(&GraphUiEntry::new(default_add_type.clone()), &default_add_type)
+    }
+
+    /// Builds state from a persisted entry (invalid fields fall back).
+    ///
+    /// Empty `add_node_type` in the entry uses `default_add_type`.
+    pub fn from_entry(entry: &GraphUiEntry, default_add_type: &str) -> Self {
         let tool = GraphTool::parse(&entry.active_tool).unwrap_or_default();
         let connection_mode = ConnectionMode::parse(&entry.connection_mode).unwrap_or_default();
         let add_node_type = if entry.add_node_type.trim().is_empty() {
-            String::from("sine")
+            default_add_type.to_string()
         } else {
             entry.add_node_type.clone()
         };
@@ -145,7 +148,7 @@ impl GraphUiState {
         }
     }
 
-    /// Serializes prefs for user-state persistence (selection is session-only).
+    /// Serializes prefs for host persistence (selection is session-only).
     pub fn to_entry(&self) -> GraphUiEntry {
         GraphUiEntry {
             active_tool: self.tool.as_str().to_string(),
@@ -185,12 +188,12 @@ mod tests {
 
     #[test]
     fn entry_round_trip_defaults() {
-        let state = GraphUiState::default();
+        let state = GraphUiState::new("sine");
         let entry = state.to_entry();
         assert_eq!(entry.active_tool, "select");
         assert_eq!(entry.connection_mode, "simple");
         assert_eq!(entry.add_node_type, "sine");
-        let restored = GraphUiState::from_entry(&entry);
+        let restored = GraphUiState::from_entry(&entry, "sine");
         assert_eq!(restored.tool, GraphTool::Select);
         assert_eq!(restored.connection_mode, ConnectionMode::Simple);
     }
@@ -202,7 +205,7 @@ mod tests {
             connection_mode: String::from("weird"),
             add_node_type: String::new(),
         };
-        let state = GraphUiState::from_entry(&entry);
+        let state = GraphUiState::from_entry(&entry, "sine");
         assert_eq!(state.tool, GraphTool::Select);
         assert_eq!(state.connection_mode, ConnectionMode::Simple);
         assert_eq!(state.add_node_type, "sine");

@@ -35,6 +35,8 @@ When reversing a direction: add a brief avoided-approach requirement in design; 
 
 This file governs **aura-editor** only. Orchestration (Compose, Dev Container, multi-repo mounts) lives in **aura-workbench**, not here.
 
+Workspace members include `aura_interfaces`, `aura_ext_builtin`, `aura_ext_notation`, and `imp_graph_editor` (Aura-free Imp graph-dag building blocks; see [`docs/design/graph-dag.md`](docs/design/graph-dag.md)).
+
 ## Commands
 
 From the repo root (with GUI system deps available):

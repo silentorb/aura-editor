@@ -61,10 +61,12 @@ fn properties_pane_shows_node_editors_when_selected() {
     );
     drop(ui);
 
-    let _ = app.update(Message::Graph(GraphEdit::SelectNode {
+    let _ = app.update(Message::Graph {
         document_id: id,
-        node_id: Some(String::from("freq")),
-    }));
+        edit: GraphEdit::SelectNode {
+            node_id: Some(String::from("freq")),
+        },
+    });
     assert_eq!(
         app.graph_ui().selected_node.as_deref(),
         Some("freq")

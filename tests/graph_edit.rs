@@ -24,10 +24,12 @@ fn open_sine_erase_node_marks_dirty() {
     let id = app.documents().active_id().unwrap();
     assert!(!app.documents().active_document().unwrap().dirty);
 
-    let _ = app.update(Message::Graph(GraphEdit::EraseNode {
+    let _ = app.update(Message::Graph {
         document_id: id,
-        node_id: String::from("freq"),
-    }));
+        edit: GraphEdit::EraseNode {
+            node_id: String::from("freq"),
+        },
+    });
 
     let doc = app.documents().active_document().unwrap();
     assert!(doc.dirty);
@@ -40,9 +42,17 @@ fn add_node_uses_unique_id() {
     let _ = app.update(Message::Command(CommandId::new(CMD_DOCUMENT_NEW_GRAPH)));
     let id = app.documents().active_id().unwrap();
 
-    let _ = app.update(Message::GraphAddTypeSelected(String::from("sine")));
-    let _ = app.update(Message::Graph(GraphEdit::AddNode { document_id: id }));
-    let _ = app.update(Message::Graph(GraphEdit::AddNode { document_id: id }));
+    let _ = app.update(Message::GraphChrome(
+        aura_editor::GraphChromeMessage::SetAddNodeType(String::from("sine")),
+    ));
+    let _ = app.update(Message::Graph {
+        document_id: id,
+        edit: GraphEdit::AddNode,
+    });
+    let _ = app.update(Message::Graph {
+        document_id: id,
+        edit: GraphEdit::AddNode,
+    });
 
     let graph = app.documents().active_document().unwrap().payload.graph().unwrap();
     assert!(graph.nodes.contains_key("sine"));
@@ -55,18 +65,22 @@ fn simple_connect_auto_pairs_ports() {
     let _ = app.update(Message::OpenPath(fixture("sine.json")));
     let id = app.documents().active_id().unwrap();
 
-    let _ = app.update(Message::Graph(GraphEdit::EraseEdgesBetween {
+    let _ = app.update(Message::Graph {
         document_id: id,
-        a: String::from("freq"),
-        b: String::from("osc"),
-    }));
+        edit: GraphEdit::EraseEdgesBetween {
+            a: String::from("freq"),
+            b: String::from("osc"),
+        },
+    });
 
     let _ = app.update(Message::Command(CommandId::new(CMD_GRAPH_TOOL_CONNECT)));
-    let _ = app.update(Message::Graph(GraphEdit::ConnectNodes {
+    let _ = app.update(Message::Graph {
         document_id: id,
-        from: String::from("freq"),
-        to: String::from("osc"),
-    }));
+        edit: GraphEdit::ConnectNodes {
+            from: String::from("freq"),
+            to: String::from("osc"),
+        },
+    });
 
     let graph = app.documents().active_document().unwrap().payload.graph().unwrap();
     assert!(graph.edges.values().any(|edge| {
@@ -83,20 +97,23 @@ fn connection_mode_persists_in_entry_shape() {
         connection_mode: ConnectionMode::Precise,
         tool: GraphTool::Connect,
         add_node_type: String::from("add"),
-        ..GraphUiState::default()
+        selected_node: None,
+        selected_edge: None,
+        connect_draft: None,
+        rename_buffer: String::new(),
     };
     let entry = state.to_entry();
     assert_eq!(entry.connection_mode, "precise");
     assert_eq!(entry.active_tool, "connect");
     assert_eq!(entry.add_node_type, "add");
-    let restored = GraphUiState::from_entry(&entry);
+    let restored = GraphUiState::from_entry(&entry, "sine");
     assert_eq!(restored.connection_mode, ConnectionMode::Precise);
     assert_eq!(restored.tool, GraphTool::Connect);
 }
 
 #[test]
 fn graph_ui_entry_defaults() {
-    let defaults = GraphUiEntry::default();
+    let defaults = GraphUiEntry::new("sine");
     assert_eq!(defaults.active_tool, "select");
     assert_eq!(defaults.connection_mode, "simple");
     assert_eq!(defaults.add_node_type, "sine");
@@ -115,7 +132,10 @@ fn new_graph_save_round_trip() {
     let mut app = test_app();
     let _ = app.update(Message::Command(CommandId::new(CMD_DOCUMENT_NEW_GRAPH)));
     let id = app.documents().active_id().unwrap();
-    let _ = app.update(Message::Graph(GraphEdit::AddNode { document_id: id }));
+    let _ = app.update(Message::Graph {
+        document_id: id,
+        edit: GraphEdit::AddNode,
+    });
     let _ = app.update(Message::SaveToPath {
         document_id: id,
         path: path.clone(),
