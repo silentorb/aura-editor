@@ -82,6 +82,9 @@ pub const USER_STATE_PIANO_ROLL_UI: &str = "piano-roll-ui";
 /// Graph DAG UI prefs user-state entry.
 pub const USER_STATE_GRAPH_DAG_UI: &str = "graph-dag-ui";
 
+/// Shell pane-grid layout user-state entry.
+pub const USER_STATE_SHELL_LAYOUT: &str = "shell-layout";
+
 /// Domain bucket id for open-documents user state.
 pub const USER_STATE_BUCKET_DOCUMENTS: &str = "documents";
 
@@ -90,6 +93,9 @@ pub const USER_STATE_BUCKET_BUILTIN: &str = "aura-builtin";
 
 /// Domain bucket id for notation UI user state.
 pub const USER_STATE_BUCKET_NOTATION: &str = "aura-notation";
+
+/// Domain bucket id for shell pane-grid layout user state.
+pub const USER_STATE_BUCKET_SHELL: &str = "shell";
 
 /// Config param key selecting the user-state bucket file id.
 pub const USER_STATE_PARAM_BUCKET: &str = "bucket";

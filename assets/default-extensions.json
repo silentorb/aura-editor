@@ -163,6 +163,16 @@
       }
     },
     {
+      "id": "shell-layout",
+      "extensionId": "aura-builtin",
+      "kind": "user-state",
+      "implementationId": "shell-layout",
+      "enabled": true,
+      "params": {
+        "bucket": "shell"
+      }
+    },
+    {
       "id": "document.new.notation",
       "extensionId": "aura-notation",
       "kind": "command",

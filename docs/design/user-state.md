@@ -22,6 +22,7 @@ Declarative requirements for ephemeral Aura Editor user-state persistence. Produ
 - Each enabled `user-state` component owns `entries[component.id]`.
 - Domain naming for buckets when practical. Convention: an extension that contributes its own state uses its extension id as the bucket id.
 - Builtin open-document tabs use bucket `documents` and entry `open-documents`.
+- Shell pane-grid layout uses bucket `shell` and entry `shell-layout`.
 - Missing file, missing entry, unsupported version, or invalid JSON → defaults for that bucket/entry; the app still starts (with logging).
 
 ### Example (`documents.json`)
@@ -74,6 +75,43 @@ Declarative requirements for ephemeral Aura Editor user-state persistence. Produ
 - Defaults when missing: select tool, simple connection mode, `addNodeType` `sine`.
 - Collect on tool, connection-mode, and add-type changes; apply once at startup when the component is enabled.
 - Selection and in-progress connect state are session-only (not persisted). Prefs are global across all graph tabs.
+
+## Shell layout
+
+- Extension `aura-builtin` contributes entry `shell-layout` in bucket `shell`.
+- Entry shape: `version` (number, currently `1`) plus a recursive `tree` of either `{ "pane": "<id>" }` or `{ "split": { "axis": "horizontal" | "vertical", "ratio": number, "a": <tree>, "b": <tree> } }`.
+- Pane ids: `status`, `view-toolbar`, `documents`. A valid tree contains each id exactly once.
+- Default when missing/invalid: horizontal (top/bottom) stack status → view-toolbar → documents, with documents taking most of the height.
+- Collect on pane drag-rearrange and split resize; apply once at startup when the component is enabled.
+- Do not persist iced widget objects; only the purpose-built tree. Closing or hiding panes is out of scope.
+
+### Example (`shell.json`)
+
+```json
+{
+  "version": 1,
+  "entries": {
+    "shell-layout": {
+      "version": 1,
+      "tree": {
+        "split": {
+          "axis": "horizontal",
+          "ratio": 0.08,
+          "a": { "pane": "status" },
+          "b": {
+            "split": {
+              "axis": "horizontal",
+              "ratio": 0.1,
+              "a": { "pane": "view-toolbar" },
+              "b": { "pane": "documents" }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
 
 ## Bindings relationship
 

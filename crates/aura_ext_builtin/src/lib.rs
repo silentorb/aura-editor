@@ -7,7 +7,7 @@ use aura_interfaces::{
     ViewDescriptor, ViewHost, CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_NEW_GRAPH, CMD_DOCUMENT_OPEN,
     CMD_GRAPH_DELETE_SELECTION, CMD_GRAPH_TOOL_ADD, CMD_GRAPH_TOOL_CONNECT, CMD_GRAPH_TOOL_ERASE,
     CMD_GRAPH_TOOL_SELECT, CMD_PLAY_START, CMD_PLAY_STOP, CMD_PLAY_TOGGLE, ROLE_IMP_GRAPH,
-    USER_STATE_GRAPH_DAG_UI, USER_STATE_OPEN_DOCUMENTS, VIEW_GRAPH_DAG,
+    USER_STATE_GRAPH_DAG_UI, USER_STATE_OPEN_DOCUMENTS, USER_STATE_SHELL_LAYOUT, VIEW_GRAPH_DAG,
 };
 
 use crate::document_types::register_document_types;
@@ -63,6 +63,10 @@ pub fn register(host: &mut (impl CommandHost + ViewHost + DocumentTypeHost + Use
     host.register_user_state(
         USER_STATE_GRAPH_DAG_UI,
         UserStateDescriptor::with_label("Graph DAG UI"),
+    );
+    host.register_user_state(
+        USER_STATE_SHELL_LAYOUT,
+        UserStateDescriptor::with_label("Shell layout"),
     );
     register_document_types(host);
 }

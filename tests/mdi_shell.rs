@@ -27,6 +27,20 @@ fn empty_state_prompts_to_open() {
 }
 
 #[test]
+fn default_shell_shows_dockable_panel_titles() {
+    let app = test_app();
+    let mut ui = simulator(app.view());
+
+    assert!(ui.find("Status").is_ok(), "status pane title should be visible");
+    assert!(ui.find("Toolbar").is_ok(), "toolbar pane title should be visible");
+    assert!(
+        ui.find("Documents").is_ok(),
+        "documents pane title should be visible"
+    );
+    assert_eq!(app.shell_panes().len(), 3);
+}
+
+#[test]
 fn open_path_creates_tab_and_close_restores_empty_state() {
     let mut app = test_app();
     let path = fixture("sine.json");

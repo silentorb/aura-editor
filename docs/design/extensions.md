@@ -82,7 +82,7 @@ Declarative requirements for Aura Editor extensions. Motivation: [`../scoping/ex
 
 ## Later
 
-1. **Richer MDI** — multiple views per document, splits/panels, inactive-tab keep-alive; further open-document / layout persistence beyond tab paths.
+1. **Richer MDI** — multiple views per document, inactive-tab keep-alive, additional tool panes, floating windows, and closable/hideable docks (shell `pane_grid` rearrange + layout persistence for status / view-toolbar / documents is in product now).
 2. **More extensions** — additional views/commands/document types as separate crates linked into the binary.
 3. **JSON fallback view** — enable a view for role `json` when a more specific view is missing.
 4. **Project-level `extensions.json`** — load from a content/project root, not only bundled defaults.

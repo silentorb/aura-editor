@@ -17,6 +17,7 @@ mod menu_bar;
 mod piano_roll;
 mod piano_roll_ui;
 mod playback;
+mod shell_layout;
 mod user_state;
 
 pub use bindings::{user_bindings_path, Bindings, DEFAULT_BINDINGS_JSON};
@@ -42,6 +43,10 @@ pub use graph_view::{
 pub use logging::init_logging;
 pub use piano_roll_ui::{PianoRollUiEntry, PianoRollUiState};
 pub use piano_roll::{apply_edit, piano_roll_panel, PianoRollEdit, PITCH_MAX, PITCH_MIN};
+pub use shell_layout::{
+    default_configuration, default_state, state_from_entry, ShellAxis, ShellLayoutEntry,
+    ShellLayoutTree, ShellPanelId, SHELL_LAYOUT_ENTRY_VERSION,
+};
 pub use user_state::{
     write_atomic, OpenDocumentsEntry, UserDir, UserStateError, UserStateStore, BUCKET_SCHEMA_VERSION,
     DEBOUNCE, DEFAULT_USER_DIR_NAME, USER_DIR_ENV,
@@ -58,8 +63,8 @@ pub use aura_interfaces::{
     CMD_PLAY_TOGGLE, DOC_TYPE_AURA_JSON, DOC_TYPE_IMP_GRAPH, DOC_TYPE_IMP_GRAPH_LIBRARY,
     DOC_TYPE_JSON, DOC_TYPE_NOTATION, ROLE_IMP_GRAPH, ROLE_JSON, ROLE_NOTATION,
     USER_STATE_BUCKET_BUILTIN, USER_STATE_BUCKET_DOCUMENTS, USER_STATE_BUCKET_NOTATION,
-    USER_STATE_GRAPH_DAG_UI, USER_STATE_OPEN_DOCUMENTS, USER_STATE_PIANO_ROLL_UI, VIEW_GRAPH_DAG,
-    VIEW_PIANO_ROLL,
+    USER_STATE_BUCKET_SHELL, USER_STATE_GRAPH_DAG_UI, USER_STATE_OPEN_DOCUMENTS,
+    USER_STATE_PIANO_ROLL_UI, USER_STATE_SHELL_LAYOUT, VIEW_GRAPH_DAG, VIEW_PIANO_ROLL,
 };
 
 use std::collections::HashMap;
@@ -71,7 +76,9 @@ use aura_imp::{aura_registry, get_node_type, list_node_types};
 use aura_io_cpal::PlaybackEngine;
 use aura_sample::SampleRate;
 use iced::keyboard::{self, key::Named, Key, Modifiers};
-use iced::widget::{button, column, container, pick_list, row, text, text_input, Space};
+use iced::widget::{
+    button, column, container, pane_grid, pick_list, row, text, text_input, Space,
+};
 use iced::{time, Element, Fill, Length, Subscription, Task};
 use iced_aw::menu::{Menu, MenuBar};
 use iced_aw::menu_items;
@@ -108,10 +115,12 @@ pub struct App {
     playback: PlaybackEngine,
     /// When set, auto-stop once playback position reaches this time (notation audition).
     playback_end_secs: Option<f64>,
+    /// Dockable shell body panes (status / toolbar / documents).
+    shell_panes: pane_grid::State<ShellPanelId>,
 }
 
 /// Messages produced by the multi-document shell.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Message {
     /// User chose Open… (legacy message; menus use [`Message::Command`]).
     OpenClicked,
@@ -162,6 +171,10 @@ pub enum Message {
     GraphRenameCommit,
     /// Change type of the selected graph node.
     GraphSelectedTypeChanged(String),
+    /// Shell pane drag / drop.
+    ShellPaneDragged(pane_grid::DragEvent),
+    /// Shell pane split resized.
+    ShellPaneResized(pane_grid::ResizeEvent),
 }
 
 impl From<PianoRollEdit> for Message {
@@ -216,6 +229,7 @@ impl App {
             playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
             playback_end_secs: None,
+            shell_panes: default_state(),
         }
     }
 
@@ -229,6 +243,7 @@ impl App {
         user_state.load_registered(extensions.user_state_bindings());
         let piano_roll_ui = restore_piano_roll_ui(&user_state, &extensions);
         let graph_ui = restore_graph_ui(&user_state, &extensions);
+        let shell_panes = restore_shell_layout(&user_state, &extensions);
         let mut app = Self {
             documents: DocumentStore::default(),
             last_error: None,
@@ -241,9 +256,15 @@ impl App {
             playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
             playback_end_secs: None,
+            shell_panes,
         };
         app.restore_open_documents();
         app
+    }
+
+    /// Shell pane-grid state.
+    pub fn shell_panes(&self) -> &pane_grid::State<ShellPanelId> {
+        &self.shell_panes
     }
 
     /// Graph-dag UI prefs.
@@ -573,6 +594,15 @@ impl App {
             }
             Message::GraphSelectedTypeChanged(node_type) => {
                 return self.change_selected_node_type(node_type);
+            }
+            Message::ShellPaneDragged(pane_grid::DragEvent::Dropped { pane, target }) => {
+                self.shell_panes.drop(pane, target);
+                return self.sync_shell_layout_task();
+            }
+            Message::ShellPaneDragged(_) => {}
+            Message::ShellPaneResized(pane_grid::ResizeEvent { split, ratio }) => {
+                self.shell_panes.resize(split, ratio);
+                return self.sync_shell_layout_task();
             }
         }
         Task::none()
@@ -1045,6 +1075,34 @@ impl App {
             .find(|binding| binding.entry_id == USER_STATE_PIANO_ROLL_UI)
     }
 
+    fn shell_layout_binding(&self) -> Option<&UserStateBinding> {
+        self.extensions
+            .user_state_bindings()
+            .iter()
+            .find(|binding| binding.entry_id == USER_STATE_SHELL_LAYOUT)
+    }
+
+    fn sync_shell_layout_task(&mut self) -> Task<Message> {
+        let Some(binding) = self.shell_layout_binding().cloned() else {
+            return Task::none();
+        };
+        let Some(entry) = ShellLayoutEntry::from_state(&self.shell_panes) else {
+            warn!("failed to serialize shell layout; skipping persist");
+            return Task::none();
+        };
+        let generation = match self
+            .user_state
+            .set_entry(&binding.bucket, &binding.entry_id, &entry)
+        {
+            Ok(generation) => generation,
+            Err(error) => {
+                warn!(%error, "failed to update shell-layout user state");
+                return Task::none();
+            }
+        };
+        self.schedule_user_state_flush(generation)
+    }
+
     fn restore_open_documents(&mut self) {
         let Some(binding) = self.open_documents_binding().cloned() else {
             return;
@@ -1149,33 +1207,47 @@ impl App {
 
     /// Builds the multi-document shell view.
     pub fn view(&self) -> Element<'_, Message> {
-        let status = row![text(self.status())].padding(8);
+        let panes = pane_grid(&self.shell_panes, |_pane, panel_id, _maximized| {
+            let title = pane_grid::TitleBar::new(text(panel_id.title()).size(12)).padding(4);
+            let body = match panel_id {
+                ShellPanelId::Status => row![text(self.status())].padding(8).into(),
+                ShellPanelId::ViewToolbar => self.view_toolbar_pane(),
+                ShellPanelId::Documents => {
+                    column![self.tab_bar(), self.document_panel()].spacing(0).into()
+                }
+            };
+            pane_grid::Content::new(body).title_bar(title)
+        })
+        .width(Fill)
+        .height(Fill)
+        .spacing(4)
+        .on_drag(Message::ShellPaneDragged)
+        .on_resize(8, Message::ShellPaneResized);
 
-        let mut shell = column![menu_bar::global_menu_bar(), status].spacing(0);
+        column![menu_bar::global_menu_bar(), panes]
+            .spacing(0)
+            .into()
+    }
 
+    fn view_toolbar_pane(&self) -> Element<'_, Message> {
         if self
             .documents
             .active_document()
             .and_then(|doc| doc.payload.notation())
             .is_some()
         {
-            shell = shell.push(
-                row![piano_roll_tool_bar(&self.piano_roll_ui)]
-                    .spacing(6)
-                    .padding([0, 8]),
-            );
+            row![piano_roll_tool_bar(&self.piano_roll_ui)]
+                .spacing(6)
+                .padding([0, 8])
+                .into()
         } else if self.active_is_graph() {
-            shell = shell.push(
-                row![self.graph_tool_bar()]
-                    .spacing(6)
-                    .padding([0, 8]),
-            );
+            row![self.graph_tool_bar()]
+                .spacing(6)
+                .padding([0, 8])
+                .into()
+        } else {
+            row![].padding([0, 8]).into()
         }
-
-        let tabs = self.tab_bar();
-        let body = self.document_panel();
-
-        shell.push(tabs).push(body).into()
     }
 
     fn graph_tool_bar(&self) -> Element<'_, Message> {
@@ -1432,6 +1504,21 @@ fn restore_graph_ui(store: &UserStateStore, extensions: &ExtensionRuntime) -> Gr
         .get_entry::<GraphUiEntry>(&binding.bucket, &binding.entry_id)
         .map(|entry| GraphUiState::from_entry(&entry))
         .unwrap_or_default()
+}
+
+fn restore_shell_layout(
+    store: &UserStateStore,
+    extensions: &ExtensionRuntime,
+) -> pane_grid::State<ShellPanelId> {
+    let Some(binding) = extensions
+        .user_state_bindings()
+        .iter()
+        .find(|binding| binding.entry_id == USER_STATE_SHELL_LAYOUT)
+    else {
+        return default_state();
+    };
+    let entry = store.get_entry::<ShellLayoutEntry>(&binding.bucket, &binding.entry_id);
+    state_from_entry(entry.as_ref())
 }
 
 fn graph_tool_command_for_key(key: &Key) -> Option<&'static str> {

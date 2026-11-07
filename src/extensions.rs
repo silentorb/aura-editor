@@ -522,6 +522,7 @@ mod tests {
         assert!(runtime.has_user_state(USER_STATE_OPEN_DOCUMENTS));
         assert!(runtime.has_user_state(aura_interfaces::USER_STATE_PIANO_ROLL_UI));
         assert!(runtime.has_user_state(aura_interfaces::USER_STATE_GRAPH_DAG_UI));
+        assert!(runtime.has_user_state(aura_interfaces::USER_STATE_SHELL_LAYOUT));
         assert!(runtime.has_command(aura_interfaces::CMD_DOCUMENT_NEW_NOTATION));
         assert!(runtime.has_command(aura_interfaces::CMD_DOCUMENT_NEW_GRAPH));
         assert!(runtime.has_command(aura_interfaces::CMD_GRAPH_TOOL_SELECT));
@@ -547,6 +548,12 @@ mod tests {
             .contains(&UserStateBinding {
                 entry_id: aura_interfaces::USER_STATE_GRAPH_DAG_UI.to_string(),
                 bucket: aura_interfaces::USER_STATE_BUCKET_BUILTIN.to_string(),
+            }));
+        assert!(runtime
+            .user_state_bindings()
+            .contains(&UserStateBinding {
+                entry_id: aura_interfaces::USER_STATE_SHELL_LAYOUT.to_string(),
+                bucket: aura_interfaces::USER_STATE_BUCKET_SHELL.to_string(),
             }));
     }
 

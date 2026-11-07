@@ -39,7 +39,7 @@ Refined graph-view requirements: [`../design/graph-dag.md`](../design/graph-dag.
 
 Users need a configurable layer between raw input and editor actions so shortcuts (and later other input) can be remapped without hard-coding keystrokes in UI code. Keyboard is the first source; the same command ids should stay usable from global menus, per-view toolbars, and from a future bindings editor. Prefer hand-editable JSON (user file overriding a bundled default) ahead of building that UI. The app should still run when no bindings file is present. Native OS input commands (clipboard, quit, window manager, and similar) stay outside this layer.
 
-Shell chrome splits global menus (File / Edit / View / Play) from per-view toolbars (for example piano-roll tools). A global toolbar and contextual per-view menus may come later.
+Shell chrome splits a fixed global menu (File / Edit / View / Play) from a dockable body: status, view toolbar, and documents live in an Iced `pane_grid` so users can rearrange and resize panes, with the layout persisted as user state. A global toolbar, more tool panes, and contextual per-view menus may come later.
 
 Refined requirements: [`../design/input-bindings.md`](../design/input-bindings.md).
 

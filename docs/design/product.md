@@ -27,6 +27,7 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Imp graph documents support create, modify, and save in the `graph-dag` view (see [`graph-dag.md`](graph-dag.md)).
 - Notation documents support create, modify, and save (see [`piano-roll.md`](piano-roll.md)).
 - Open document paths and the active tab are restored from ephemeral user state under the Aura user directory (see [`user-state.md`](user-state.md)); untitled tabs and pan/zoom are not.
+- Shell body layout (status, view toolbar, and documents panes) is an Iced `pane_grid`: users may drag panes to rearrange and resize splits; the layout tree is persisted as user state (see [`user-state.md`](user-state.md)). The default arrangement matches the prior fixed vertical stack.
 - Extensibility (commands, views, document types, and user-state) follows [`extensions.md`](extensions.md).
 
 ## Graph files
@@ -52,11 +53,12 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 
 ## Shell chrome
 
-- The shell has a global **menu bar** with File / Edit / View / Play roots.
+- The shell has a global **menu bar** with File / Edit / View / Play roots. The menu bar is fixed chrome above the dockable pane grid (not itself a rearrangeable pane).
 - File menu exposes document commands (Open, New notation, New graph, Save, Close). Edit and View are reserved for future global actions.
 - Play menu exposes transport commands (Start, Stop). Toggle playback is available as a command (default Space) and need not appear in the menu.
-- **Per-view toolbars** hold view-specific controls (for example the piano-roll tool strip). Menus in this slice are not contextual to the active view.
-- A global application toolbar and per-view contextual menus are deferred.
+- Below the menu, the shell body is three named panes in an Iced `pane_grid`: **status**, **view-toolbar**, and **documents**. Panes have title bars for drag rearrange; they are not closable or hideable in this slice. Split ratios are user-resizable.
+- The **view-toolbar** pane is always present; its body shows the active view’s tool strip (graph or piano-roll) when applicable, otherwise empty space. Menus in this slice are not contextual to the active view.
+- A global application toolbar, additional tool panes, floating windows, and per-view contextual menus are deferred.
 
 ## Playback
 
