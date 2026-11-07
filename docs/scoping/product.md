@@ -31,7 +31,9 @@ Aura JSON files declare a root `type` and stack through document types (`json` �
 
 Hand-crafted notation lives in separate Aura JSON files (`type: "notation"`) with beat-grid note events. Users create, open, and save those documents in a piano-roll view (modal Draw / Select / Erase tools). Notation events are the same engine `Score` material procedural generators produce; Play from a piano-roll tab auditions them through the Imp sine voice path with a user-placed playhead.
 
-Open Imp graphs show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Node layout is automatic only — no freeform dragging of nodes on a canvas. Notation documents open into the piano-roll view. Start/Stop/Toggle (Space) streams the active Imp graph tab through CPAL (from `t = 0`) or auditions the active notation tab from the parked playhead; saving is not required to play.
+Open Imp graphs show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Users edit nodes and connections with modal Select / Add / Connect / Erase tools; connection UI toggles between simple node→node wiring and precise port handles. Node layout is automatic only — no freeform dragging of nodes on a canvas. Users may create and save Imp graph documents as well as notation. Notation documents open into the piano-roll view. Start/Stop/Toggle (Space) streams the active Imp graph tab through CPAL (from `t = 0`) or auditions the active notation tab from the parked playhead; saving is not required to play.
+
+Refined graph-view requirements: [`../design/graph-dag.md`](../design/graph-dag.md).
 
 ## Input and commands
 

@@ -40,9 +40,15 @@ pub const EXT_AURA_NOTATION: &str = "aura-notation";
 /// Builtin command implementation / component ids.
 pub const CMD_DOCUMENT_OPEN: &str = "document.open";
 pub const CMD_DOCUMENT_CLOSE_ACTIVE: &str = "document.close_active";
+pub const CMD_DOCUMENT_NEW_GRAPH: &str = "document.new.graph";
 pub const CMD_PLAY_START: &str = "play.start";
 pub const CMD_PLAY_STOP: &str = "play.stop";
 pub const CMD_PLAY_TOGGLE: &str = "play.toggle";
+pub const CMD_GRAPH_TOOL_SELECT: &str = "graph.tool.select";
+pub const CMD_GRAPH_TOOL_ADD: &str = "graph.tool.add";
+pub const CMD_GRAPH_TOOL_CONNECT: &str = "graph.tool.connect";
+pub const CMD_GRAPH_TOOL_ERASE: &str = "graph.tool.erase";
+pub const CMD_GRAPH_DELETE_SELECTION: &str = "graph.delete.selection";
 
 /// Notation extension command ids.
 pub const CMD_DOCUMENT_NEW_NOTATION: &str = "document.new.notation";
@@ -73,8 +79,14 @@ pub const USER_STATE_OPEN_DOCUMENTS: &str = "open-documents";
 /// Piano roll UI prefs user-state entry.
 pub const USER_STATE_PIANO_ROLL_UI: &str = "piano-roll-ui";
 
+/// Graph DAG UI prefs user-state entry.
+pub const USER_STATE_GRAPH_DAG_UI: &str = "graph-dag-ui";
+
 /// Domain bucket id for open-documents user state.
 pub const USER_STATE_BUCKET_DOCUMENTS: &str = "documents";
+
+/// Domain bucket id for builtin graph UI user state.
+pub const USER_STATE_BUCKET_BUILTIN: &str = "aura-builtin";
 
 /// Domain bucket id for notation UI user state.
 pub const USER_STATE_BUCKET_NOTATION: &str = "aura-notation";

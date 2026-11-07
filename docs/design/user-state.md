@@ -67,6 +67,14 @@ Declarative requirements for ephemeral Aura Editor user-state persistence. Produ
 - Defaults when missing: draw tool, snap on, resolution `1/16`.
 - Collect on tool, snap toggle, and snap-resolution changes; apply once at startup when the component is enabled.
 
+## Graph DAG UI
+
+- Extension `aura-builtin` contributes entry `graph-dag-ui` in bucket `aura-builtin`.
+- Entry shape: `activeTool` (`select` | `add` | `connect` | `erase`), `connectionMode` (`simple` | `precise`), `addNodeType` (string node type id).
+- Defaults when missing: select tool, simple connection mode, `addNodeType` `sine`.
+- Collect on tool, connection-mode, and add-type changes; apply once at startup when the component is enabled.
+- Selection and in-progress connect state are session-only (not persisted). Prefs are global across all graph tabs.
+
 ## Bindings relationship
 
 - Keyboard `bindings.json` remains on the OS project config path (`directories::ProjectDirs`) and is hand-edited for now.

@@ -7,8 +7,10 @@ mod bindings;
 mod command;
 mod document;
 mod extensions;
+mod graph_edit;
 mod graph_file;
 mod graph_layout;
+mod graph_ui;
 mod graph_view;
 mod logging;
 mod menu_bar;
@@ -26,10 +28,16 @@ pub use extensions::{
     register_linked_extensions, ExtensionRuntime, RegistrationHost, StackedOpen, UserStateBinding,
     DEFAULT_EXTENSIONS_JSON,
 };
+pub use graph_edit::{
+    add_edge, add_node, auto_pair_ports, graph_to_aura_json, remove_edge, remove_edges_between,
+    remove_node, rename_node, set_node_type, unique_node_id, GraphEditError,
+};
 pub use graph_file::OpenError;
 pub use graph_layout::{layout_graph, GraphLayout, LaidOutNode};
+pub use graph_ui::{ConnectionMode, GraphTool, GraphUiEntry, GraphUiState};
 pub use graph_view::{
-    center_translation, clamp_scale, pan_by, zoom_at_point, GraphView,
+    center_translation, clamp_scale, pan_by, zoom_at_point, GraphEdit, GraphView, NodePortInfo,
+    PortCatalog,
 };
 pub use logging::init_logging;
 pub use piano_roll_ui::{PianoRollUiEntry, PianoRollUiState};
@@ -43,12 +51,14 @@ pub use aura_ext_notation::{
     semitone_label, snap_beats, Notation, NotationNote, NotationTool, SnapResolution,
 };
 pub use aura_interfaces::{
-    CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_NEW_NOTATION, CMD_DOCUMENT_OPEN, CMD_DOCUMENT_SAVE,
-    CMD_NOTATION_SNAP_TOGGLE, CMD_NOTATION_TOOL_DRAW, CMD_NOTATION_TOOL_ERASE,
-    CMD_NOTATION_TOOL_SELECT, CMD_PLAY_START, CMD_PLAY_STOP, CMD_PLAY_TOGGLE, DOC_TYPE_AURA_JSON,
-    DOC_TYPE_IMP_GRAPH, DOC_TYPE_IMP_GRAPH_LIBRARY, DOC_TYPE_JSON, DOC_TYPE_NOTATION,
-    ROLE_IMP_GRAPH, ROLE_JSON, ROLE_NOTATION, USER_STATE_BUCKET_DOCUMENTS,
-    USER_STATE_BUCKET_NOTATION, USER_STATE_PIANO_ROLL_UI, USER_STATE_OPEN_DOCUMENTS, VIEW_GRAPH_DAG,
+    CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_NEW_GRAPH, CMD_DOCUMENT_NEW_NOTATION, CMD_DOCUMENT_OPEN,
+    CMD_DOCUMENT_SAVE, CMD_GRAPH_DELETE_SELECTION, CMD_GRAPH_TOOL_ADD, CMD_GRAPH_TOOL_CONNECT,
+    CMD_GRAPH_TOOL_ERASE, CMD_GRAPH_TOOL_SELECT, CMD_NOTATION_SNAP_TOGGLE, CMD_NOTATION_TOOL_DRAW,
+    CMD_NOTATION_TOOL_ERASE, CMD_NOTATION_TOOL_SELECT, CMD_PLAY_START, CMD_PLAY_STOP,
+    CMD_PLAY_TOGGLE, DOC_TYPE_AURA_JSON, DOC_TYPE_IMP_GRAPH, DOC_TYPE_IMP_GRAPH_LIBRARY,
+    DOC_TYPE_JSON, DOC_TYPE_NOTATION, ROLE_IMP_GRAPH, ROLE_JSON, ROLE_NOTATION,
+    USER_STATE_BUCKET_BUILTIN, USER_STATE_BUCKET_DOCUMENTS, USER_STATE_BUCKET_NOTATION,
+    USER_STATE_GRAPH_DAG_UI, USER_STATE_OPEN_DOCUMENTS, USER_STATE_PIANO_ROLL_UI, VIEW_GRAPH_DAG,
     VIEW_PIANO_ROLL,
 };
 
@@ -57,16 +67,21 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
+use aura_imp::{aura_registry, get_node_type, list_node_types};
 use aura_io_cpal::PlaybackEngine;
 use aura_sample::SampleRate;
-use iced::keyboard::{self, Key, Modifiers};
-use iced::widget::{button, column, container, pick_list, row, text, Space};
-use iced::{time, Element, Fill, Subscription, Task};
+use iced::keyboard::{self, key::Named, Key, Modifiers};
+use iced::widget::{button, column, container, pick_list, row, text, text_input, Space};
+use iced::{time, Element, Fill, Length, Subscription, Task};
+use iced_aw::menu::{Menu, MenuBar};
+use iced_aw::menu_items;
 use tracing::warn;
 
+use crate::graph_ui::ConnectDraft;
 use crate::graph_view::graph_canvas;
 use crate::playback::{
-    playhead_start_secs, prepare_notation_playback, prepare_session_playback, secs_to_beats,
+    playback_registry, playhead_start_secs, prepare_notation_playback, prepare_session_playback,
+    secs_to_beats,
 };
 
 /// Root application state for the editor shell.
@@ -85,6 +100,8 @@ pub struct App {
     user_state: UserStateStore,
     /// Notation tool / snap prefs (persisted when enabled).
     piano_roll_ui: PianoRollUiState,
+    /// Graph-dag tool / connection-mode prefs (persisted when enabled).
+    graph_ui: GraphUiState,
     /// Parked playhead beats keyed by open notation document.
     playheads: HashMap<DocumentId, f64>,
     /// CPAL stream owner for the active playback graph.
@@ -133,11 +150,29 @@ pub enum Message {
     },
     /// Periodic tick while audio is playing (playhead redraw + end detection).
     PlaybackTick,
+    /// Graph-dag canvas edit.
+    Graph(GraphEdit),
+    /// Node type chosen for the Add tool.
+    GraphAddTypeSelected(String),
+    /// Connection mode from Graph view options.
+    GraphConnectionModeSelected(ConnectionMode),
+    /// Rename buffer edited in the graph toolbar.
+    GraphRenameInput(String),
+    /// Commit rename of the selected graph node.
+    GraphRenameCommit,
+    /// Change type of the selected graph node.
+    GraphSelectedTypeChanged(String),
 }
 
 impl From<PianoRollEdit> for Message {
     fn from(edit: PianoRollEdit) -> Self {
         Self::PianoRoll(edit)
+    }
+}
+
+impl From<GraphEdit> for Message {
+    fn from(edit: GraphEdit) -> Self {
+        Self::Graph(edit)
     }
 }
 
@@ -177,6 +212,7 @@ impl App {
             extensions,
             user_state: UserStateStore::in_memory(),
             piano_roll_ui: PianoRollUiState::default(),
+            graph_ui: GraphUiState::default(),
             playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
             playback_end_secs: None,
@@ -192,6 +228,7 @@ impl App {
         let mut user_state = UserStateStore::open(user_dir);
         user_state.load_registered(extensions.user_state_bindings());
         let piano_roll_ui = restore_piano_roll_ui(&user_state, &extensions);
+        let graph_ui = restore_graph_ui(&user_state, &extensions);
         let mut app = Self {
             documents: DocumentStore::default(),
             last_error: None,
@@ -200,12 +237,25 @@ impl App {
             extensions,
             user_state,
             piano_roll_ui,
+            graph_ui,
             playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
             playback_end_secs: None,
         };
         app.restore_open_documents();
         app
+    }
+
+    /// Graph-dag UI prefs.
+    pub fn graph_ui(&self) -> &GraphUiState {
+        &self.graph_ui
+    }
+
+    fn active_is_graph(&self) -> bool {
+        self.documents
+            .active_document()
+            .and_then(|doc| doc.payload.graph())
+            .is_some()
     }
 
     /// Whether the CPAL playback engine currently holds a running stream.
@@ -355,6 +405,7 @@ impl App {
             Message::SelectTab(id) => {
                 self.documents.select(id);
                 self.piano_roll_ui.selected_note = None;
+                self.graph_ui.clear_selection();
                 self.piano_roll_ui.playhead_beats = self.parked_playhead_beats(id);
                 return self.sync_open_documents_task();
             }
@@ -362,6 +413,7 @@ impl App {
                 self.documents.close(id);
                 self.playheads.remove(&id);
                 self.piano_roll_ui.selected_note = None;
+                self.graph_ui.clear_selection();
                 self.piano_roll_ui.playhead_beats = self
                     .documents
                     .active_id()
@@ -370,6 +422,11 @@ impl App {
                 return self.sync_open_documents_task();
             }
             Message::KeyInput { key, modifiers } => {
+                if self.active_is_graph() && modifiers.is_empty() {
+                    if let Some(command) = graph_tool_command_for_key(&key) {
+                        return self.update(Message::Command(CommandId::new(command)));
+                    }
+                }
                 if let Some(command) = self.bindings.resolve(&key, modifiers) {
                     return self.update(Message::Command(command));
                 }
@@ -385,6 +442,7 @@ impl App {
                             self.documents.close(id);
                             self.playheads.remove(&id);
                             self.piano_roll_ui.selected_note = None;
+                            self.graph_ui.clear_selection();
                             self.piano_roll_ui.playhead_beats = self
                                 .documents
                                 .active_id()
@@ -397,24 +455,63 @@ impl App {
                         self.last_error = None;
                         self.documents.create_untitled_notation();
                         self.piano_roll_ui.selected_note = None;
+                        self.graph_ui.clear_selection();
+                        return self.sync_open_documents_task();
+                    }
+                    CMD_DOCUMENT_NEW_GRAPH => {
+                        self.last_error = None;
+                        self.documents.create_untitled_graph();
+                        self.graph_ui.clear_selection();
                         return self.sync_open_documents_task();
                     }
                     CMD_DOCUMENT_SAVE => return self.save_active(),
                     CMD_NOTATION_TOOL_DRAW => {
+                        if self.active_is_graph() {
+                            return Task::none();
+                        }
                         self.piano_roll_ui.tool = NotationTool::Draw;
                         return self.sync_piano_roll_ui_task();
                     }
                     CMD_NOTATION_TOOL_SELECT => {
+                        if self.active_is_graph() {
+                            return Task::none();
+                        }
                         self.piano_roll_ui.tool = NotationTool::Select;
                         return self.sync_piano_roll_ui_task();
                     }
                     CMD_NOTATION_TOOL_ERASE => {
+                        if self.active_is_graph() {
+                            return Task::none();
+                        }
                         self.piano_roll_ui.tool = NotationTool::Erase;
                         return self.sync_piano_roll_ui_task();
                     }
                     CMD_NOTATION_SNAP_TOGGLE => {
                         self.piano_roll_ui.snap_enabled = !self.piano_roll_ui.snap_enabled;
                         return self.sync_piano_roll_ui_task();
+                    }
+                    CMD_GRAPH_TOOL_SELECT => {
+                        self.graph_ui.tool = GraphTool::Select;
+                        self.graph_ui.connect_draft = None;
+                        return self.sync_graph_ui_task();
+                    }
+                    CMD_GRAPH_TOOL_ADD => {
+                        self.graph_ui.tool = GraphTool::Add;
+                        self.graph_ui.connect_draft = None;
+                        return self.sync_graph_ui_task();
+                    }
+                    CMD_GRAPH_TOOL_CONNECT => {
+                        self.graph_ui.tool = GraphTool::Connect;
+                        self.graph_ui.connect_draft = None;
+                        return self.sync_graph_ui_task();
+                    }
+                    CMD_GRAPH_TOOL_ERASE => {
+                        self.graph_ui.tool = GraphTool::Erase;
+                        self.graph_ui.connect_draft = None;
+                        return self.sync_graph_ui_task();
+                    }
+                    CMD_GRAPH_DELETE_SELECTION => {
+                        return self.delete_graph_selection();
                     }
                     CMD_PLAY_START => {
                         self.start_playback();
@@ -445,7 +542,7 @@ impl App {
                 return self.sync_piano_roll_ui_task();
             }
             Message::SaveToPath { document_id, path } => {
-                return self.write_notation_document(document_id, path);
+                return self.write_document(document_id, path);
             }
             Message::PlaybackTick => {
                 if let Some(end) = self.playback_end_secs {
@@ -453,6 +550,29 @@ impl App {
                         self.stop_playback();
                     }
                 }
+            }
+            Message::Graph(edit) => {
+                return self.apply_graph_edit(edit);
+            }
+            Message::GraphAddTypeSelected(node_type) => {
+                self.graph_ui.add_node_type = node_type;
+                self.graph_ui.tool = GraphTool::Add;
+                self.graph_ui.connect_draft = None;
+                return self.sync_graph_ui_task();
+            }
+            Message::GraphConnectionModeSelected(mode) => {
+                self.graph_ui.connection_mode = mode;
+                self.graph_ui.connect_draft = None;
+                return self.sync_graph_ui_task();
+            }
+            Message::GraphRenameInput(value) => {
+                self.graph_ui.rename_buffer = value;
+            }
+            Message::GraphRenameCommit => {
+                return self.commit_graph_rename();
+            }
+            Message::GraphSelectedTypeChanged(node_type) => {
+                return self.change_selected_node_type(node_type);
             }
         }
         Task::none()
@@ -587,36 +707,49 @@ impl App {
         let Some(doc) = self.documents.active_document() else {
             return Task::none();
         };
-        if doc.payload.notation().is_none() {
+        let can_save = doc.payload.notation().is_some() || doc.payload.graph().is_some();
+        if !can_save {
             self.last_error = Some(OpenError::Invalid {
                 path: doc.path.clone().unwrap_or_else(|| PathBuf::from("unsaved")),
-                reason: String::from("only notation documents can be saved in this slice"),
+                reason: String::from("only notation and Imp graph documents can be saved"),
             });
             return Task::none();
         }
         let document_id = doc.id;
         if let Some(path) = doc.path.clone() {
-            return self.write_notation_document(document_id, path);
+            return self.write_document(document_id, path);
         }
         pick_save_file(document_id)
     }
 
-    fn write_notation_document(&mut self, document_id: DocumentId, path: PathBuf) -> Task<Message> {
+    fn write_document(&mut self, document_id: DocumentId, path: PathBuf) -> Task<Message> {
         let Some(doc) = self.documents.get_mut(document_id) else {
             return Task::none();
         };
-        let Some(score) = doc.payload.notation() else {
-            return Task::none();
-        };
-        let json = match score.to_pretty_json() {
-            Ok(json) => json,
-            Err(error) => {
-                self.last_error = Some(OpenError::Invalid {
-                    path: path.clone(),
-                    reason: error.to_string(),
-                });
-                return Task::none();
+        let json = if let Some(score) = doc.payload.notation() {
+            match score.to_pretty_json() {
+                Ok(json) => json,
+                Err(error) => {
+                    self.last_error = Some(OpenError::Invalid {
+                        path: path.clone(),
+                        reason: error.to_string(),
+                    });
+                    return Task::none();
+                }
             }
+        } else if let Some(graph) = doc.payload.graph() {
+            match graph_to_aura_json(graph) {
+                Ok(json) => json,
+                Err(error) => {
+                    self.last_error = Some(OpenError::Invalid {
+                        path: path.clone(),
+                        reason: error.to_string(),
+                    });
+                    return Task::none();
+                }
+            }
+        } else {
+            return Task::none();
         };
         if let Err(error) = std::fs::write(&path, json) {
             self.last_error = Some(OpenError::Io {
@@ -628,6 +761,274 @@ impl App {
         self.last_error = None;
         self.documents.set_path_and_clean(document_id, path);
         self.sync_open_documents_task()
+    }
+
+    fn graph_ui_binding(&self) -> Option<&UserStateBinding> {
+        self.extensions
+            .user_state_bindings()
+            .iter()
+            .find(|binding| binding.entry_id == USER_STATE_GRAPH_DAG_UI)
+    }
+
+    fn sync_graph_ui_task(&mut self) -> Task<Message> {
+        let Some(binding) = self.graph_ui_binding().cloned() else {
+            return Task::none();
+        };
+        let entry = self.graph_ui.to_entry();
+        let generation = match self
+            .user_state
+            .set_entry(&binding.bucket, &binding.entry_id, &entry)
+        {
+            Ok(generation) => generation,
+            Err(error) => {
+                warn!(%error, "failed to update graph-dag-ui user state");
+                return Task::none();
+            }
+        };
+        self.schedule_user_state_flush(generation)
+    }
+
+    fn apply_graph_edit(&mut self, edit: GraphEdit) -> Task<Message> {
+        match edit {
+            GraphEdit::SelectNode {
+                document_id,
+                node_id,
+            } => {
+                if self.documents.active_id() != Some(document_id) {
+                    return Task::none();
+                }
+                self.graph_ui.select_node(node_id);
+            }
+            GraphEdit::SelectEdge {
+                document_id,
+                edge_id,
+            } => {
+                if self.documents.active_id() != Some(document_id) {
+                    return Task::none();
+                }
+                self.graph_ui.select_edge(edge_id);
+            }
+            GraphEdit::AddNode { document_id } => {
+                let Some(doc) = self.documents.get_mut(document_id) else {
+                    return Task::none();
+                };
+                let Some(graph) = doc.payload.graph_mut() else {
+                    return Task::none();
+                };
+                let id = unique_node_id(graph, &self.graph_ui.add_node_type);
+                if let Err(error) = add_node(graph, id.clone(), self.graph_ui.add_node_type.clone())
+                {
+                    self.status_notice = Some(error.to_string());
+                    return Task::none();
+                }
+                doc.dirty = true;
+                self.status_notice = None;
+                self.graph_ui.select_node(Some(id));
+            }
+            GraphEdit::BeginConnect {
+                document_id,
+                from_node,
+                from_port,
+            } => {
+                if self.documents.active_id() != Some(document_id) {
+                    return Task::none();
+                }
+                self.graph_ui.connect_draft = Some(ConnectDraft {
+                    from_node,
+                    from_port,
+                });
+            }
+            GraphEdit::CancelConnect { document_id } => {
+                if self.documents.active_id() == Some(document_id) {
+                    self.graph_ui.connect_draft = None;
+                }
+            }
+            GraphEdit::ConnectNodes {
+                document_id,
+                from,
+                to,
+            } => {
+                let neighbor = self
+                    .documents
+                    .get_mut(document_id)
+                    .and_then(|doc| doc.path.clone());
+                let registry = match node_type_registry(neighbor.as_deref()) {
+                    Ok(registry) => registry,
+                    Err(error) => {
+                        self.status_notice = Some(error.to_string());
+                        self.graph_ui.connect_draft = None;
+                        return Task::none();
+                    }
+                };
+                let Some(doc) = self.documents.get_mut(document_id) else {
+                    return Task::none();
+                };
+                let Some(graph) = doc.payload.graph_mut() else {
+                    return Task::none();
+                };
+                match auto_pair_ports(&registry, graph, &from, &to) {
+                    Ok((from_port, to_port)) => {
+                        if let Err(error) = add_edge(graph, from, from_port, to, to_port) {
+                            self.status_notice = Some(error.to_string());
+                        } else {
+                            doc.dirty = true;
+                            self.status_notice = None;
+                        }
+                    }
+                    Err(error) => {
+                        self.status_notice = Some(error.to_string());
+                    }
+                }
+                self.graph_ui.connect_draft = None;
+            }
+            GraphEdit::ConnectPorts {
+                document_id,
+                from_node,
+                from_port,
+                to_node,
+                to_port,
+            } => {
+                let Some(doc) = self.documents.get_mut(document_id) else {
+                    return Task::none();
+                };
+                let Some(graph) = doc.payload.graph_mut() else {
+                    return Task::none();
+                };
+                if let Err(error) = add_edge(graph, from_node, from_port, to_node, to_port) {
+                    self.status_notice = Some(error.to_string());
+                } else {
+                    doc.dirty = true;
+                    self.status_notice = None;
+                }
+                self.graph_ui.connect_draft = None;
+            }
+            GraphEdit::EraseNode {
+                document_id,
+                node_id,
+            } => {
+                let Some(doc) = self.documents.get_mut(document_id) else {
+                    return Task::none();
+                };
+                let Some(graph) = doc.payload.graph_mut() else {
+                    return Task::none();
+                };
+                if let Err(error) = remove_node(graph, &node_id) {
+                    self.status_notice = Some(error.to_string());
+                } else {
+                    doc.dirty = true;
+                    self.status_notice = None;
+                    if self.graph_ui.selected_node.as_deref() == Some(node_id.as_str()) {
+                        self.graph_ui.clear_selection();
+                    }
+                }
+            }
+            GraphEdit::EraseEdge {
+                document_id,
+                edge_id,
+            } => {
+                let Some(doc) = self.documents.get_mut(document_id) else {
+                    return Task::none();
+                };
+                let Some(graph) = doc.payload.graph_mut() else {
+                    return Task::none();
+                };
+                if let Err(error) = remove_edge(graph, &edge_id) {
+                    self.status_notice = Some(error.to_string());
+                } else {
+                    doc.dirty = true;
+                    self.status_notice = None;
+                    if self.graph_ui.selected_edge.as_deref() == Some(edge_id.as_str()) {
+                        self.graph_ui.clear_selection();
+                    }
+                }
+            }
+            GraphEdit::EraseEdgesBetween {
+                document_id,
+                a,
+                b,
+            } => {
+                let Some(doc) = self.documents.get_mut(document_id) else {
+                    return Task::none();
+                };
+                let Some(graph) = doc.payload.graph_mut() else {
+                    return Task::none();
+                };
+                let removed = remove_edges_between(graph, &a, &b);
+                if removed > 0 {
+                    doc.dirty = true;
+                    self.status_notice = None;
+                    self.graph_ui.clear_selection();
+                }
+            }
+        }
+        Task::none()
+    }
+
+    fn delete_graph_selection(&mut self) -> Task<Message> {
+        let Some(doc) = self.documents.active_document() else {
+            return Task::none();
+        };
+        if doc.payload.graph().is_none() {
+            return Task::none();
+        }
+        let document_id = doc.id;
+        if let Some(node_id) = self.graph_ui.selected_node.clone() {
+            return self.apply_graph_edit(GraphEdit::EraseNode {
+                document_id,
+                node_id,
+            });
+        }
+        if let Some(edge_id) = self.graph_ui.selected_edge.clone() {
+            return self.apply_graph_edit(GraphEdit::EraseEdge {
+                document_id,
+                edge_id,
+            });
+        }
+        Task::none()
+    }
+
+    fn commit_graph_rename(&mut self) -> Task<Message> {
+        let Some(old_id) = self.graph_ui.selected_node.clone() else {
+            return Task::none();
+        };
+        let new_id = self.graph_ui.rename_buffer.trim().to_string();
+        let Some(doc) = self.documents.active_document_mut() else {
+            return Task::none();
+        };
+        let Some(graph) = doc.payload.graph_mut() else {
+            return Task::none();
+        };
+        match rename_node(graph, &old_id, new_id.clone()) {
+            Ok(id) => {
+                doc.dirty = true;
+                self.status_notice = None;
+                self.graph_ui.select_node(Some(id));
+            }
+            Err(error) => {
+                self.status_notice = Some(error.to_string());
+                self.graph_ui.rename_buffer = old_id;
+            }
+        }
+        Task::none()
+    }
+
+    fn change_selected_node_type(&mut self, node_type: String) -> Task<Message> {
+        let Some(node_id) = self.graph_ui.selected_node.clone() else {
+            return Task::none();
+        };
+        let Some(doc) = self.documents.active_document_mut() else {
+            return Task::none();
+        };
+        let Some(graph) = doc.payload.graph_mut() else {
+            return Task::none();
+        };
+        if let Err(error) = set_node_type(graph, &node_id, node_type) {
+            self.status_notice = Some(error.to_string());
+        } else {
+            doc.dirty = true;
+            self.status_notice = None;
+        }
+        Task::none()
     }
 
     fn open_documents_binding(&self) -> Option<&UserStateBinding> {
@@ -763,12 +1164,122 @@ impl App {
                     .spacing(6)
                     .padding([0, 8]),
             );
+        } else if self.active_is_graph() {
+            shell = shell.push(
+                row![self.graph_tool_bar()]
+                    .spacing(6)
+                    .padding([0, 8]),
+            );
         }
 
         let tabs = self.tab_bar();
         let body = self.document_panel();
 
         shell.push(tabs).push(body).into()
+    }
+
+    fn graph_tool_bar(&self) -> Element<'_, Message> {
+        let select_label = if self.graph_ui.tool == GraphTool::Select {
+            "[Select]"
+        } else {
+            "Select"
+        };
+        let add_label = if self.graph_ui.tool == GraphTool::Add {
+            "[Add]"
+        } else {
+            "Add"
+        };
+        let connect_label = if self.graph_ui.tool == GraphTool::Connect {
+            "[Connect]"
+        } else {
+            "Connect"
+        };
+        let erase_label = if self.graph_ui.tool == GraphTool::Erase {
+            "[Erase]"
+        } else {
+            "Erase"
+        };
+
+        let type_ids = available_node_types(
+            self.documents
+                .active_document()
+                .and_then(|doc| doc.path.as_deref()),
+        );
+        let add_type = self.graph_ui.add_node_type.clone();
+
+        let mut left = row![
+            button(select_label).on_press(Message::Command(CommandId::new(CMD_GRAPH_TOOL_SELECT))),
+            button(add_label).on_press(Message::Command(CommandId::new(CMD_GRAPH_TOOL_ADD))),
+            pick_list(
+                type_ids.clone(),
+                Some(add_type),
+                Message::GraphAddTypeSelected,
+            ),
+            button(connect_label)
+                .on_press(Message::Command(CommandId::new(CMD_GRAPH_TOOL_CONNECT))),
+            button(erase_label).on_press(Message::Command(CommandId::new(CMD_GRAPH_TOOL_ERASE))),
+        ]
+        .spacing(6);
+
+        if let Some(node_id) = &self.graph_ui.selected_node {
+            let selected_type = self
+                .documents
+                .active_document()
+                .and_then(|doc| doc.payload.graph())
+                .and_then(|graph| graph.nodes.get(node_id))
+                .map(|node| node.node_type.clone());
+            left = left.push(text("Id:"));
+            left = left.push(
+                text_input("node id", &self.graph_ui.rename_buffer)
+                    .on_input(Message::GraphRenameInput)
+                    .on_submit(Message::GraphRenameCommit)
+                    .width(Length::Fixed(120.0)),
+            );
+            left = left.push(
+                button("Rename").on_press(Message::GraphRenameCommit),
+            );
+            left = left.push(text("Type:"));
+            left = left.push(pick_list(
+                type_ids,
+                selected_type,
+                Message::GraphSelectedTypeChanged,
+            ));
+        }
+
+        let mode_label = match self.graph_ui.connection_mode {
+            ConnectionMode::Simple => "Simple",
+            ConnectionMode::Precise => "Precise",
+        };
+        let options_menu = Menu::new(menu_items!(
+            (button(text(format!("Connection: {mode_label} (toggle)")).width(Length::Fill))
+                .on_press(Message::GraphConnectionModeSelected(
+                    match self.graph_ui.connection_mode {
+                        ConnectionMode::Simple => ConnectionMode::Precise,
+                        ConnectionMode::Precise => ConnectionMode::Simple,
+                    },
+                ))
+                .width(Length::Fill)),
+            (button(text("Simple").width(Length::Fill))
+                .on_press(Message::GraphConnectionModeSelected(ConnectionMode::Simple))
+                .width(Length::Fill)),
+            (button(text("Precise").width(Length::Fill))
+                .on_press(Message::GraphConnectionModeSelected(ConnectionMode::Precise))
+                .width(Length::Fill)),
+        ))
+        .max_width(220.0);
+
+        let options = MenuBar::new(menu_items!(
+            (button(text("Graph view options")), options_menu),
+        ))
+        .padding(0)
+        .spacing(0)
+        .close_on_item_click(true)
+        .close_on_background_click(true);
+
+        row![left, Space::new().width(Fill), options]
+            .spacing(8)
+            .align_y(iced::Alignment::Center)
+            .into()
     }
 
     fn tab_bar(&self) -> Element<'_, Message> {
@@ -801,7 +1312,10 @@ impl App {
         {
             match self.extensions.resolve_view_for_chain(&doc.roles) {
                 Some((role, VIEW_GRAPH_DAG)) => match doc.payload.graph() {
-                    Some(graph) => graph_canvas(doc.id, graph),
+                    Some(graph) => {
+                        let ports = build_port_catalog(graph, doc.path.as_deref());
+                        graph_canvas(doc.id, graph, &self.graph_ui, ports)
+                    }
                     None => view_error_placeholder(format!(
                         "View `{VIEW_GRAPH_DAG}` requires an Imp graph tip (role `{role}`)"
                     )),
@@ -904,6 +1418,80 @@ fn restore_piano_roll_ui(
         .get_entry::<PianoRollUiEntry>(&binding.bucket, &binding.entry_id)
         .map(|entry| PianoRollUiState::from_entry(&entry))
         .unwrap_or_default()
+}
+
+fn restore_graph_ui(store: &UserStateStore, extensions: &ExtensionRuntime) -> GraphUiState {
+    let Some(binding) = extensions
+        .user_state_bindings()
+        .iter()
+        .find(|binding| binding.entry_id == USER_STATE_GRAPH_DAG_UI)
+    else {
+        return GraphUiState::default();
+    };
+    store
+        .get_entry::<GraphUiEntry>(&binding.bucket, &binding.entry_id)
+        .map(|entry| GraphUiState::from_entry(&entry))
+        .unwrap_or_default()
+}
+
+fn graph_tool_command_for_key(key: &Key) -> Option<&'static str> {
+    match key {
+        Key::Character(text) => match text.as_str() {
+            "s" | "S" => Some(CMD_GRAPH_TOOL_SELECT),
+            "a" | "A" => Some(CMD_GRAPH_TOOL_ADD),
+            "c" | "C" => Some(CMD_GRAPH_TOOL_CONNECT),
+            "e" | "E" => Some(CMD_GRAPH_TOOL_ERASE),
+            _ => None,
+        },
+        Key::Named(Named::Delete) | Key::Named(Named::Backspace) => {
+            Some(CMD_GRAPH_DELETE_SELECTION)
+        }
+        _ => None,
+    }
+}
+
+fn node_type_registry(
+    neighbor_hint: Option<&std::path::Path>,
+) -> Result<aura_imp::Registry, String> {
+    match playback_registry(neighbor_hint) {
+        Ok(registry) => Ok(registry),
+        Err(_) => aura_registry().map_err(|error| error.to_string()),
+    }
+}
+
+fn available_node_types(neighbor_hint: Option<&std::path::Path>) -> Vec<String> {
+    let Ok(registry) = node_type_registry(neighbor_hint) else {
+        return vec![String::from("sine"), String::from("output"), String::from("parameter")];
+    };
+    let mut ids: Vec<String> = list_node_types(&registry)
+        .into_iter()
+        .map(|def| def.id.clone())
+        .collect();
+    ids.sort();
+    ids.dedup();
+    if ids.is_empty() {
+        ids.push(String::from("sine"));
+    }
+    ids
+}
+
+fn build_port_catalog(
+    graph: &imp_core_types::Graph,
+    neighbor_hint: Option<&std::path::Path>,
+) -> PortCatalog {
+    let mut catalog = PortCatalog::new();
+    let Ok(registry) = node_type_registry(neighbor_hint) else {
+        return catalog;
+    };
+    for node in graph.nodes.values() {
+        let mut info = NodePortInfo::default();
+        if let Some(def) = get_node_type(&registry, &node.node_type) {
+            info.inputs = def.inputs.keys().cloned().collect();
+            info.outputs = def.outputs.keys().cloned().collect();
+        }
+        catalog.insert(node.id.clone(), info);
+    }
+    catalog
 }
 
 fn view_error_placeholder(message: String) -> Element<'static, Message> {

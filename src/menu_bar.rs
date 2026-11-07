@@ -9,8 +9,8 @@ use iced_aw::menu::{Menu, MenuBar};
 use iced_aw::menu_items;
 
 use crate::{
-    CommandId, Message, CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_NEW_NOTATION, CMD_DOCUMENT_OPEN,
-    CMD_DOCUMENT_SAVE, CMD_PLAY_START, CMD_PLAY_STOP,
+    CommandId, Message, CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_NEW_GRAPH, CMD_DOCUMENT_NEW_NOTATION,
+    CMD_DOCUMENT_OPEN, CMD_DOCUMENT_SAVE, CMD_PLAY_START, CMD_PLAY_STOP,
 };
 
 fn menu_item<'a>(label: &'a str, command: &'static str) -> iced::widget::Button<'a, Message> {
@@ -24,6 +24,7 @@ pub fn global_menu_bar<'a>() -> Element<'a, Message> {
     let file_menu = Menu::new(menu_items!(
         (menu_item("Open…", CMD_DOCUMENT_OPEN)),
         (menu_item("New notation", CMD_DOCUMENT_NEW_NOTATION)),
+        (menu_item("New graph", CMD_DOCUMENT_NEW_GRAPH)),
         (menu_item("Save", CMD_DOCUMENT_SAVE)),
         (menu_item("Close", CMD_DOCUMENT_CLOSE_ACTIVE)),
     ))

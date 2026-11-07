@@ -79,6 +79,14 @@ impl DocumentPayload {
             Self::Graph(_) | Self::Json(_) => None,
         }
     }
+
+    /// Mutable Imp graph when this tip is a graph document.
+    pub fn graph_mut(&mut self) -> Option<&mut Graph> {
+        match self {
+            Self::Graph(graph) => Some(graph),
+            Self::Notation(_) | Self::Json(_) => None,
+        }
+    }
 }
 
 /// An open document held in the editor session.
@@ -210,6 +218,41 @@ impl DocumentStore {
                 Some(aura_interfaces::ROLE_NOTATION.to_string()),
             ],
             payload: DocumentPayload::Notation(Notation::empty()),
+            dirty: true,
+        });
+        self.active = Some(id);
+        id
+    }
+
+    /// Creates an untitled empty Imp graph tab and activates it.
+    pub fn create_untitled_graph(&mut self) -> DocumentId {
+        let id = DocumentId(self.next_id);
+        self.next_id += 1;
+        let index = self.next_untitled;
+        self.next_untitled += 1;
+        let title = if index == 0 {
+            String::from("Untitled graph")
+        } else {
+            format!("Untitled graph-{index}")
+        };
+        self.documents.push(SessionDocument {
+            id,
+            path: None,
+            title,
+            type_chain: vec![
+                aura_interfaces::DOC_TYPE_JSON.to_string(),
+                aura_interfaces::DOC_TYPE_AURA_JSON.to_string(),
+                aura_interfaces::DOC_TYPE_IMP_GRAPH.to_string(),
+            ],
+            roles: vec![
+                Some(aura_interfaces::ROLE_JSON.to_string()),
+                None,
+                Some(aura_interfaces::ROLE_IMP_GRAPH.to_string()),
+            ],
+            payload: DocumentPayload::Graph(Graph {
+                nodes: Default::default(),
+                edges: Default::default(),
+            }),
             dirty: true,
         });
         self.active = Some(id);

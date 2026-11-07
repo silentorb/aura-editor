@@ -20,12 +20,12 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 
 - The editor is a multi-document interface: multiple documents may be open in separate tabs.
 - Users can open a single-graph Aura JSON Imp file (`type: "imp-graph"` plus `nodes` / `edges`) or a notation document (`type: "notation"`), switch tabs, and close documents.
-- Users may create a new empty notation document (untitled), edit it, and save it to disk (Save As when untitled).
+- Users may create a new empty notation document or a new empty Imp graph (untitled), edit it, and save it to disk (Save As when untitled).
 - Opening a path that is already open activates that tab (no duplicate).
 - An open document stores its document-type chain and tip payload (Imp `Graph` for `imp-graph`; notation model for `notation`).
 - The document content pane resolves a **view** by walking the type chain from tip to root and using the first role with an enabled view (`imp-graph` → builtin `graph-dag`; `notation` → `piano-roll`).
-- Imp graph open remains read-only: creating, modifying, and saving graph documents are out of scope until designed.
-- Notation documents support create, modify, and save in this slice (see [`piano-roll.md`](piano-roll.md)).
+- Imp graph documents support create, modify, and save in the `graph-dag` view (see [`graph-dag.md`](graph-dag.md)).
+- Notation documents support create, modify, and save (see [`piano-roll.md`](piano-roll.md)).
 - Open document paths and the active tab are restored from ephemeral user state under the Aura user directory (see [`user-state.md`](user-state.md)); untitled tabs and pan/zoom are not.
 - Extensibility (commands, views, document types, and user-state) follows [`extensions.md`](extensions.md).
 
@@ -41,17 +41,19 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Supported notation format: Aura JSON with `type: "notation"` and versioned tempo, time signature, and note events (see [`piano-roll.md`](piano-roll.md)).
 - New File creates an empty notation document in memory; Save writes Aura JSON; Open loads an existing notation file into the piano-roll view.
 
-## Graph visualization
+## Graph visualization and editing
 
-- Open graphs are drawn on an Iced Canvas using automatic layout only (petgraph-backed layered layout).
+- Open graphs are drawn on an Iced Canvas using automatic layout only (petgraph-backed layered layout). See [`graph-dag.md`](graph-dag.md).
 - Users may pan and zoom the canvas; they must not freely drag nodes to persist positions.
-- Editing nodes/connections later regenerates layout.
-- Port-level connection detail is not required in the initial view (node-level edges are enough).
+- Editing nodes or connections regenerates layout.
+- Modal tools: Select / Add / Connect / Erase on the graph toolbar.
+- Connection UI is toggleable globally: **Simple** (node→node with auto port pairing) or **Precise** (port handles, drag output→input).
+- Graph view options (including connection mode) live in a far-right toolbar dropdown and apply across all graph tabs.
 
 ## Shell chrome
 
 - The shell has a global **menu bar** with File / Edit / View / Play roots.
-- File menu exposes document commands (Open, New notation, Save, Close). Edit and View are reserved for future global actions.
+- File menu exposes document commands (Open, New notation, New graph, Save, Close). Edit and View are reserved for future global actions.
 - Play menu exposes transport commands (Start, Stop). Toggle playback is available as a command (default Space) and need not appear in the menu.
 - **Per-view toolbars** hold view-specific controls (for example the piano-roll tool strip). Menus in this slice are not contextual to the active view.
 - A global application toolbar and per-view contextual menus are deferred.
@@ -101,7 +103,7 @@ Repos and projects use kebab-case. Rust packages use snake_case (`aura_editor`).
 - Freeform manual node placement on a canvas (layout stays automatic)
 - Persisting pan/zoom camera per document across launches
 - Opening GraphLibrary catalogs as editor documents until that flow is designed
-- Creating, editing, or saving graph documents in the current read-only open slice
+- Full input-literal property inspector for graph nodes (rename + change type only in this slice)
 - Continuous scrub of the playhead while audio is running (park + start only)
 - Explicit playback-node override / pinned target (Select playback node deferred; fringe cases TBD)
 - Fully abstracting persistence from Aura operation (paths remain optional library-discovery hints)

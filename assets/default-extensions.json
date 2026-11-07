@@ -54,6 +54,54 @@
       "params": {}
     },
     {
+      "id": "document.new.graph",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "document.new.graph",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "graph.tool.select",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "graph.tool.select",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "graph.tool.add",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "graph.tool.add",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "graph.tool.connect",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "graph.tool.connect",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "graph.tool.erase",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "graph.tool.erase",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "graph.delete.selection",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "graph.delete.selection",
+      "enabled": true,
+      "params": {}
+    },
+    {
       "id": "graph-dag",
       "extensionId": "aura-builtin",
       "kind": "view",
@@ -61,6 +109,16 @@
       "roles": ["imp-graph"],
       "enabled": true,
       "params": {}
+    },
+    {
+      "id": "graph-dag-ui",
+      "extensionId": "aura-builtin",
+      "kind": "user-state",
+      "implementationId": "graph-dag-ui",
+      "enabled": true,
+      "params": {
+        "bucket": "aura-builtin"
+      }
     },
     {
       "id": "json",

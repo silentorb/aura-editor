@@ -35,7 +35,7 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 - Users may **New** an empty notation document (untitled tab), **Open** an existing `notation` file, and **Save** (Save As when untitled).
 - Edits mark the document dirty; a successful save clears dirty.
 - Untitled tabs are not restored via open-documents user state.
-- Imp graph documents remain read-only in this slice.
+- Imp graph documents are edited in the `graph-dag` view (see [`graph-dag.md`](graph-dag.md)), not in the piano roll.
 
 ## View
 
