@@ -16,7 +16,7 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 
 ## Tools
 
-- Modal tools live on the per-view toolbar: **Select**, **Add**, **Connect**, **Erase**.
+- Modal tools live on the Documents pane tool strip (below the tab bar): **Select**, **Add**, **Connect**, **Erase**.
 - Tool choice is global across all open graph tabs (see user-state `graph-dag-ui`).
 - Default keyboard bindings when a graph tab is active: `S` Select, `A` Add, `C` Connect, `E` Erase. **Delete** removes the current selection in Select.
 
@@ -52,7 +52,7 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 ## Selection and update
 
 - Selection is session-only (not persisted).
-- **Update** in this slice means rename node id and change node type for the selected node in the shell **Properties** pane (not the view toolbar). A full input-literal property inspector is out of scope.
+- **Update** in this slice means rename node id and change node type for the selected node in the shell **Properties** pane (not the Documents tool strip). A full input-literal property inspector is out of scope.
 
 ## Persistence of documents
 

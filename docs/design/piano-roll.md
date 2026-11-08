@@ -5,8 +5,8 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 ## Role
 
 - Users can create and edit discrete note events on a time × pitch grid — a classic MIDI piano roll — without making destructive timeline editing the product’s center.
-- Notation is a **complement** to procedural Imp graphs: one plain-text Aura JSON file per notation document, composed later with other files like a programming project.
-- Editor notation is the same musical material procedural generators produce: an engine `Score` / `ScoreSignal`. Play from a piano-roll tab injects that score into the Imp voice path (`external_score` → `poly_sine_score` → output), sharing the Score ontology with `arpeggio` / `bass_line` / `drum_grid`.
+- Notation is a **complement** to procedural Imp graphs: one plain-text Aura JSON file per notation document, composed later with other files like a programming project (including Imp graphs that reference notation via `notation_score`).
+- Editor notation is the same musical material procedural generators produce: an engine `Score` / `ScoreSignal`. Play from a piano-roll tab injects that score into the Imp voice path (`external_score` → `poly_sine_score` → output), sharing the Score ontology with `arpeggio` / `bass_line` / `drum_grid` / `notation_score`.
 
 ## Document type
 
@@ -27,7 +27,7 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 ```
 
 - Pitch uses scientific notation labels with middle C = `C4` = semitone `60` (A4 = 69), matching Aura engine `Semitone` encoding.
-- Event fields align with engine `NoteEvent` / `Score`; the editor owns the serde schema in this slice (no engine serde dependency yet).
+- Event fields align with engine `NoteEvent` / `Score`. The editor keeps its own `aura_ext_notation` serde model for the piano roll; the engine independently loads the same on-disk schema for Imp `notation_score` nodes. Schemas must stay compatible.
 - Per-note `params` are omitted in v1; `velocity` defaults to `1.0` when absent.
 
 ## Create, open, and save
@@ -84,7 +84,7 @@ Tool state is editor-global (not per document). Playhead parking is session-only
 ## Non-goals / avoided approaches
 
 - Measure / bar chrome and timing-division UI beyond the snap subdivision
-- Engine `aura_sequencing` serde for notation files (mapping is in-process today)
+- Merging editor and engine notation serde into one shared crate in this slice (parallel compatible loaders are enough)
 - Making the piano roll the primary authoring model over Imp graphs
 - RMB-driven context menus for the three tools in v1
 - Scrub-while-dragging the playhead during playback (park + start only in this slice)

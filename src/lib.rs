@@ -1232,15 +1232,16 @@ impl App {
                 .padding(4)
                 .style(styles::toolbar(&self.resolved));
             let body = match panel_id {
-                ShellPanelId::Status => container(row![text(self.status()).size(body_size)])
-                    .padding(8)
-                    .style(styles::toolbar(&self.resolved))
-                    .into(),
-                ShellPanelId::ViewToolbar => self.view_toolbar_pane(),
-                ShellPanelId::Documents => {
-                    column![self.tab_bar(), self.document_panel()].spacing(0).into()
-                }
+                ShellPanelId::Documents => column![
+                    self.tab_bar(),
+                    self.view_toolbar_pane(),
+                    self.document_panel(),
+                ]
+                .spacing(0)
+                .into(),
                 ShellPanelId::Properties => self.properties_pane(),
+                // Kept on the enum for user-state migration only; never live in the grid.
+                ShellPanelId::Status | ShellPanelId::ViewToolbar => row![].into(),
             };
             pane_grid::Content::new(body).title_bar(title)
         })
@@ -1251,9 +1252,15 @@ impl App {
         .on_resize(8, Message::ShellPaneResized)
         .style(styles::pane_grid(&self.resolved));
 
+        let status_bar = container(row![text(self.status()).size(body_size)])
+            .width(Fill)
+            .padding(8)
+            .style(styles::toolbar(&self.resolved));
+
         column![
             menu_bar::global_menu_bar(&self.resolved, &self.accessibility),
-            panes
+            panes,
+            status_bar,
         ]
         .spacing(0)
         .into()

@@ -79,10 +79,11 @@ Declarative requirements for ephemeral Aura Editor user-state persistence. Produ
 ## Shell layout
 
 - Extension `aura-builtin` contributes entry `shell-layout` in bucket `shell`.
-- Entry shape: `version` (number, currently `2`) plus a recursive `tree` of either `{ "pane": "<id>" }` or `{ "split": { "axis": "horizontal" | "vertical", "ratio": number, "a": <tree>, "b": <tree> } }`.
-- Pane ids: `status`, `view-toolbar`, `documents`, `properties`. A valid v2 tree contains each id exactly once.
-- Default when missing/invalid: horizontal stack status → view-toolbar → (documents | properties), with Properties on the right of Documents (vertical split, documents ~0.75).
-- Version `1` trees that contain exactly the three prior panes (`status`, `view-toolbar`, `documents`) are migrated by replacing the `documents` leaf with a documents|properties vertical split (properties on the right at the default ratio), then treated as version `2`. Other unsupported versions fall back to the default.
+- Entry shape: `version` (number, currently `3`) plus a recursive `tree` of either `{ "pane": "<id>" }` or `{ "split": { "axis": "horizontal" | "vertical", "ratio": number, "a": <tree>, "b": <tree> } }`.
+- Live pane ids: `documents`, `properties`. A valid v3 tree contains each id exactly once. Legacy ids `status` and `view-toolbar` may still appear in older saved trees for migration only.
+- Default when missing/invalid: vertical split documents | properties (documents ~0.75). The fixed bottom status bar and the Documents-hosted view toolbar are not part of this tree.
+- Version `1` trees that contain exactly the three prior panes (`status`, `view-toolbar`, `documents`) are migrated by replacing the `documents` leaf with a documents|properties vertical split, then stripping `status` and `view-toolbar` (collapsing parent splits onto the surviving sibling), and treated as version `3`.
+- Version `2` trees that contain the four prior panes (`status`, `view-toolbar`, `documents`, `properties`) are migrated by stripping `status` and `view-toolbar` the same way, then treated as version `3`. Other unsupported versions fall back to the default.
 - Collect on pane drag-rearrange and split resize; apply once at startup when the component is enabled.
 - Do not persist iced widget objects; only the purpose-built tree. Closing or hiding panes is out of scope.
 
@@ -93,27 +94,13 @@ Declarative requirements for ephemeral Aura Editor user-state persistence. Produ
   "version": 1,
   "entries": {
     "shell-layout": {
-      "version": 2,
+      "version": 3,
       "tree": {
         "split": {
-          "axis": "horizontal",
-          "ratio": 0.08,
-          "a": { "pane": "status" },
-          "b": {
-            "split": {
-              "axis": "horizontal",
-              "ratio": 0.1,
-              "a": { "pane": "view-toolbar" },
-              "b": {
-                "split": {
-                  "axis": "vertical",
-                  "ratio": 0.75,
-                  "a": { "pane": "documents" },
-                  "b": { "pane": "properties" }
-                }
-              }
-            }
-          }
+          "axis": "vertical",
+          "ratio": 0.75,
+          "a": { "pane": "documents" },
+          "b": { "pane": "properties" }
         }
       }
     }

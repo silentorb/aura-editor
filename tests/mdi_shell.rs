@@ -31,8 +31,6 @@ fn default_shell_shows_dockable_panel_titles() {
     let app = test_app();
     let mut ui = simulator(app.view());
 
-    assert!(ui.find("Status").is_ok(), "status pane title should be visible");
-    assert!(ui.find("Toolbar").is_ok(), "toolbar pane title should be visible");
     assert!(
         ui.find("Documents").is_ok(),
         "documents pane title should be visible"
@@ -41,7 +39,20 @@ fn default_shell_shows_dockable_panel_titles() {
         ui.find("Properties").is_ok(),
         "properties pane title should be visible"
     );
-    assert_eq!(app.shell_panes().len(), 4);
+    assert!(
+        ui.find("Toolbar").is_err(),
+        "toolbar must not be a dockable pane title"
+    );
+    assert!(
+        ui.find("Status").is_err(),
+        "status must not be a dockable pane title"
+    );
+    assert!(
+        ui.find("Open a file or create a notation to begin")
+            .is_ok(),
+        "fixed status bar should show the empty-state message"
+    );
+    assert_eq!(app.shell_panes().len(), 2);
 }
 
 #[test]

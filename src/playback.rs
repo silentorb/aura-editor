@@ -9,7 +9,8 @@ use aura_imp::{
     GraphJsonError, NodeId, Registry, RegistryError,
 };
 use aura_integration::{
-    translate_graph_to_sampler, translate_graph_to_sampler_with_bindings,
+    translate_graph_to_sampler_with_bindings, translate_graph_to_sampler_with_options,
+    TranslateOptions,
 };
 use aura_render::Sampler;
 use aura_sample::SampleRate;
@@ -77,8 +78,8 @@ pub fn playback_registry(neighbor_hint: Option<&Path>) -> Result<Registry, Playb
 /// Translates the in-memory session graph into a sampler for CPAL playback.
 ///
 /// Round-trips JSON so the editor's Imp mount and the engine's Imp mount need
-/// not share a single `imp_core_types` package identity. `neighbor_hint` is only
-/// used for optional sibling library discovery.
+/// not share a single `imp_core_types` package identity. `neighbor_hint` is used
+/// for sibling library discovery and as the graph directory for `notation_score` paths.
 pub fn prepare_session_playback(
     graph: &Graph,
     neighbor_hint: Option<&Path>,
@@ -89,8 +90,18 @@ pub fn prepare_session_playback(
     let engine_graph =
         graph_from_json_str(&json).map_err(PlaybackPrepareError::Serialize)?;
     let registry = playback_registry(neighbor_hint)?;
-    let sampler = translate_graph_to_sampler(&engine_graph, &registry, sample_rate)
-        .map_err(|error| PlaybackPrepareError::Translate(error.to_string()))?;
+    let graph_dir = neighbor_hint.and_then(Path::parent);
+    let empty_bindings = BTreeMap::new();
+    let sampler = translate_graph_to_sampler_with_options(
+        &engine_graph,
+        &registry,
+        sample_rate,
+        TranslateOptions {
+            score_bindings: &empty_bindings,
+            graph_dir,
+        },
+    )
+    .map_err(|error| PlaybackPrepareError::Translate(error.to_string()))?;
     Ok((node_id, sampler))
 }
 

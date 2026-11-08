@@ -439,6 +439,7 @@ dependencies = [
  "aura_sequencing",
  "imp_graph_resolve",
  "imp_typecheck",
+ "serde",
  "serde_json",
  "thiserror 2.0.21",
 ]

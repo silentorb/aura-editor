@@ -41,12 +41,15 @@ Refined graph-view requirements: [`../design/graph-dag.md`](../design/graph-dag.
 
 Users need a configurable layer between raw input and editor actions so shortcuts (and later other input) can be remapped without hard-coding keystrokes in UI code. Keyboard is the first source; the same command ids should stay usable from global menus, per-view toolbars, and from a future bindings editor. Prefer hand-editable JSON (user file overriding a bundled default) ahead of building that UI. The app should still run when no bindings file is present. Native OS input commands (clipboard, quit, window manager, and similar) stay outside this layer.
 
-Shell chrome splits a fixed global menu (File / Edit / View / Play) from a dockable body: status, view toolbar, documents, and properties live in an Iced `pane_grid` so users can rearrange and resize panes, with the layout persisted as user state. A global toolbar, further tool panes, closable docks, and contextual per-view menus may come later.
+Shell chrome splits a fixed global menu (File / Edit / View / Play) and a fixed bottom status bar from a dockable body: documents and properties live in an Iced `pane_grid` so users can rearrange and resize panes, with the layout persisted as user state. The active view’s tool strip sits inside the Documents pane under the tabs. A global application toolbar, further tool panes, closable docks, and contextual per-view menus may come later.
 
 Refined requirements: [`../design/input-bindings.md`](../design/input-bindings.md).
 
 ## Open questions
 
-- Whether notation files later appear as first-class `score` sources inside user Imp graphs (beyond editor audition bindings)
 - How tightly the editor couples to aura-engine APIs versus file/CLI boundaries
 - Whether everyday authoring stays 1:1 graph-per-file or also embraces GraphLibrary catalogs as first-class multi-document sources
+
+## Resolved
+
+- Notation files are first-class `score` sources inside Imp graphs via the engine `notation_score` node (path relative to the graph file). Editor Play passes the document path so sibling notation files resolve the same way as CLI renders.
