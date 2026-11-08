@@ -74,13 +74,13 @@ use aura_io_cpal::PlaybackEngine;
 use aura_sample::SampleRate;
 use iced::keyboard::{self, key::Named, Key, Modifiers};
 use iced::widget::{button, column, container, pane_grid, pick_list, row, text, Space};
-use iced::{time, Element, Fill, Renderer, Subscription, Task, Theme};
+use iced::{time, Element, Fill, Padding, Renderer, Subscription, Task, Theme};
 use iced_aw::menu::{Menu, MenuBar};
 use iced_aw::menu_items;
 use native_theme_iced::{
     at_least, button_content_min_size, button_padding, combo_box_padding, control_line_height,
-    font_size, from_preset, from_system, pick_list_handle, scaled_text_size, styles,
-    AccessibilityPreferences, ResolvedTheme,
+    font_size, from_preset, from_system, padding_inside_border, pick_list_handle, scaled_text_size,
+    styles, AccessibilityPreferences, ResolvedTheme,
 };
 use tracing::{info, warn};
 
@@ -1227,10 +1227,11 @@ impl App {
     /// Builds the multi-document shell view.
     pub fn view(&self) -> Element<'_, Message> {
         let body_size = font_size(&self.resolved, &self.accessibility);
+        let pane_pad = padding_inside_border(&self.resolved.card.border, Padding::new(8.0));
         let panes = pane_grid(&self.shell_panes, |_pane, panel_id, _maximized| {
             let title = pane_grid::TitleBar::new(text(panel_id.title()).size(body_size))
-                .padding(4)
-                .style(styles::toolbar(&self.resolved));
+                .padding(pane_pad)
+                .style(styles::container_card(&self.resolved));
             let body = match panel_id {
                 ShellPanelId::Documents => column![
                     self.tab_bar(),
@@ -1243,7 +1244,10 @@ impl App {
                 // Kept on the enum for user-state migration only; never live in the grid.
                 ShellPanelId::Status | ShellPanelId::ViewToolbar => row![].into(),
             };
-            pane_grid::Content::new(body).title_bar(title)
+            let body: Element<'_, Message> = container(body).padding(pane_pad).into();
+            pane_grid::Content::new(body)
+                .title_bar(title)
+                .style(styles::container_card(&self.resolved))
         })
         .width(Fill)
         .height(Fill)
@@ -1346,7 +1350,6 @@ impl App {
         let body = font_size(&self.resolved, &self.accessibility);
         if !self.active_is_graph() {
             return container(column![text("No graph selection").size(body)].spacing(8))
-                .padding(8)
                 .style(styles::toolbar(&self.resolved))
                 .into();
         }
@@ -1355,7 +1358,6 @@ impl App {
             return container(
                 column![text("Select a node to edit properties").size(body)].spacing(8),
             )
-            .padding(8)
             .style(styles::toolbar(&self.resolved))
             .into();
         };
@@ -1384,7 +1386,6 @@ impl App {
             .map(Message::GraphChrome)]
             .spacing(8),
         )
-        .padding(8)
         .style(styles::toolbar(&self.resolved))
         .into()
     }
@@ -1489,7 +1490,6 @@ impl App {
         container(content)
             .width(Fill)
             .height(Fill)
-            .padding(8)
             .into()
     }
 }
