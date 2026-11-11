@@ -147,6 +147,10 @@ pub fn secs_to_beats(notation: &Notation, secs: f64) -> Result<f64, PlaybackPrep
 }
 
 /// Builds a bound Imp audition graph: `external_score` → `poly_sine_score` → `out`.
+///
+/// The editor models an open notation document as a nullary `external_score` node with
+/// Aura-embedded [`Notation`] data; callers pass that embedded payload here. On-disk
+/// `type: "notation"` files are unchanged and are only projected at open/save.
 pub fn prepare_notation_playback(
     notation: &Notation,
     sample_rate: SampleRate,

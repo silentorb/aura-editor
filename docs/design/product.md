@@ -8,7 +8,8 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - It is a music/audio **designer**: workflows emphasize procedural and declarative design over traditional DAW-style manual editing of music and audio data.
 - Users can hand-craft data and configuration; that capability must not displace Aura’s procedural, declarative model as the product’s center.
 - **Imp graphs** are the primary persistent resources users open and work with (not traditional DAW project bundles).
-- Hand-crafted **notation** (`notation` Aura JSON) is a second document kind: plain-text beat-grid note events stored as separate files, complementary to procedural graphs. See [`piano-roll.md`](piano-roll.md).
+- Hand-crafted **notation** (`notation` Aura JSON) is a second on-disk document kind: plain-text beat-grid note events stored as separate files, complementary to procedural graphs. See [`piano-roll.md`](piano-roll.md).
+- **Documents are storage/UI envelopes.** On open, editable tips become an in-memory node graph (`ModelGraph`). An `imp-graph` file loads as its Imp nodes/edges; a `notation` file loads as a single nullary `external_score` node with Aura-embedded notation data (a complex primitive that outputs a static `score`). On-disk JSON shapes are unchanged; save projects the model back to the tip’s file format.
 
 ## Application stack
 
@@ -22,10 +23,10 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Users can open a single-graph Aura JSON Imp file (`type: "imp-graph"` plus `nodes` / `edges`) or a notation document (`type: "notation"`), switch tabs, and close documents.
 - Users may create a new empty notation document or a new empty Imp graph (untitled), edit it, and save it to disk (Save As when untitled).
 - Opening a path that is already open activates that tab (no duplicate).
-- An open document stores its document-type chain and tip payload (Imp `Graph` for `imp-graph`; notation model for `notation`).
+- An open document stores its document-type chain, view roles, and a node-backed tip (`ModelGraph` for `imp-graph` and `notation`; generic JSON remains an exception).
 - The document content pane resolves a **view** by walking the type chain from tip to root and using the first role with an enabled view (`imp-graph` → builtin `graph-dag`; `notation` → `piano-roll`).
 - Imp graph documents support create, modify, and save in the `graph-dag` view (see [`graph-dag.md`](graph-dag.md)).
-- Notation documents support create, modify, and save (see [`piano-roll.md`](piano-roll.md)).
+- Notation documents support create, modify, and save in the piano-roll view, which edits the nullary node’s embedded notation (see [`piano-roll.md`](piano-roll.md)).
 - Open document paths and the active tab are restored from ephemeral user state under the Aura user directory (see [`user-state.md`](user-state.md)); untitled tabs and pan/zoom are not.
 - Shell body layout (documents and properties panes) is an Iced `pane_grid`: users may drag panes to rearrange and resize splits; the layout tree is persisted as user state (see [`user-state.md`](user-state.md)). The default arrangement is documents | properties, with Properties on the right of Documents. The active view’s tool strip lives inside the Documents pane (below the tab bar). A fixed status bar at the bottom of the window shows errors and transport feedback.
 - Extensibility (commands, views, document types, and user-state) follows [`extensions.md`](extensions.md).
@@ -40,7 +41,7 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 ## Notation score files
 
 - Supported notation format: Aura JSON with `type: "notation"` and versioned tempo, time signature, and note events (see [`piano-roll.md`](piano-roll.md)).
-- New File creates an empty notation document in memory; Save writes Aura JSON; Open loads an existing notation file into the piano-roll view.
+- New File creates an empty notation tip in memory (nullary `external_score` node + empty embedded notation); Save writes `type: "notation"` Aura JSON from the embedded payload; Open wraps an existing notation file the same way and shows the piano-roll view.
 
 ## Graph visualization and editing
 

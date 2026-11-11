@@ -16,6 +16,7 @@ It stays in its own repository so **aura-engine** can remain an independent, hea
 - Position the product as a music/audio **designer**, distinct from a traditional DAW
 - Treat **Imp graphs** as the primary persistent resources (flat, orthogonal UX), rather than traditional DAW “projects” and supporting resource trees
 - Spread Aura content across multiple plain-text files (graphs, notation, and later other resources), composed like a programming project rather than crammed into a single binary project file
+- Treat **documents as storage/UI** for in-memory nodes: opening a file loads a node graph; some tips (e.g. notation) are a single nullary embedded-data node that outputs a static signal
 - Provide a hand-crafted **piano roll** for notation as a complement to procedural generation—useful when fully procedural authoring is too hard—without making destructive timeline editing the center of the product
 - Provide a multi-document interface so users can open multiple documents (graphs and notation) in tabs
 
@@ -29,7 +30,7 @@ Refined requirements live in [`../design/product.md`](../design/product.md), [`.
 
 Aura JSON files declare a root `type` and stack through document types (`json` → `aura-json` → …). Single-graph Imp files (`type: "imp-graph"` plus `nodes` / `edges`) are the first tip users open successfully. Multi-graph catalogs (`type: "imp-graph-library"`) are recognized then rejected until catalog open is designed.
 
-Hand-crafted notation lives in separate Aura JSON files (`type: "notation"`) with beat-grid note events. Users create, open, and save those documents in a piano-roll view (modal Draw / Select / Erase tools). Notation events are the same engine `Score` material procedural generators produce; Play from a piano-roll tab auditions them through the Imp sine voice path with a user-placed playhead.
+Hand-crafted notation lives in separate Aura JSON files (`type: "notation"`) with beat-grid note events. In memory those files load as a nullary score node with embedded notation; the piano-roll view edits that node (modal Draw / Select / Erase tools). Notation events are the same engine `Score` material procedural generators produce; Play from a piano-roll tab auditions them through the Imp sine voice path with a user-placed playhead.
 
 Open Imp graphs show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Users edit nodes and connections with modal Select / Add / Connect / Erase tools; connection UI toggles between simple node→node wiring and precise port handles. Node layout is automatic only — no freeform dragging of nodes on a canvas. Users may create and save Imp graph documents as well as notation. Notation documents open into the piano-roll view. Start/Stop/Toggle (Space) streams the active Imp graph tab through CPAL (from `t = 0`) or auditions the active notation tab from the parked playhead; saving is not required to play.
 
@@ -52,4 +53,5 @@ Refined requirements: [`../design/input-bindings.md`](../design/input-bindings.m
 
 ## Resolved
 
-- Notation files are first-class `score` sources inside Imp graphs via the engine `notation_score` node (path relative to the graph file). Editor Play passes the document path so sibling notation files resolve the same way as CLI renders.
+- Notation files are first-class `score` sources inside Imp graphs via the engine `notation_score` node (path relative to the graph file). That path-reference path is distinct from opening a notation file in the editor, which wraps it as a nullary embedded-score node for the piano roll.
+- Editor Play from a notation tab uses the embedded notation payload (not a sibling-path resolve of the open tab).

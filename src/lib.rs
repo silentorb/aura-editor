@@ -21,7 +21,8 @@ mod user_state;
 pub use bindings::{user_bindings_path, Bindings, DEFAULT_BINDINGS_JSON};
 pub use command::CommandId;
 pub use document::{
-    DocumentId, DocumentPayload, DocumentStore, GraphDocument, SessionDocument,
+    DocumentId, DocumentPayload, DocumentStore, EmbeddedPayload, GraphDocument, ModelGraph,
+    SessionDocument, NOTATION_SCORE_NODE_ID, NOTATION_SCORE_NODE_TYPE,
 };
 pub use extensions::{
     register_linked_extensions, ExtensionRuntime, RegistrationHost, StackedOpen, UserStateBinding,
