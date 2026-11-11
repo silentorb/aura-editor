@@ -30,7 +30,7 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 ## Connection modes
 
 - **Simple**: edges are drawn node-to-node (ports ignored for display). Connecting clicks a source node then a target node; the editor auto-pairs an unused compatible output→input from the node-type registry. If no pair exists, the action fails with a status message.
-- **Precise**: nodes show labeled port lists — input ports (left) and output ports (right), each as a circle with its port id beside it. Connecting drags from an output handle to an input handle. Edge endpoints attach to the chosen ports. Node height grows with `max(inputs, outputs)` when ports are shown.
+- **Precise**: nodes show labeled port lists — input ports (left) and output ports (right), each as a circle with its port id beside it. Connecting drags from an output handle to an input handle. Edge endpoints attach to the chosen ports. Node height grows with `max(inputs, outputs)` when ports are shown. Automatic layered layout spaces same-rank nodes and content bounds using those rendered sizes (not the simple-mode box).
 - Connection mode is global across graph tabs and is toggled from **Graph view options** via a **Precise ports** checkbox (checked = Precise, unchecked = Simple).
 
 ### Auto-pair rules (Simple)

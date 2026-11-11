@@ -8,7 +8,9 @@ use iced::widget::canvas::{self, path::Builder, Frame, Geometry, Path, Stroke, T
 use iced::widget::Canvas;
 use iced::{Color, Element, Fill, Font, Pixels, Point, Rectangle, Renderer, Size, Theme, Vector};
 
-use crate::graph_layout::{layout_graph, GraphLayout, NODE_SIZE};
+use crate::graph_layout::{
+    layout_graph, node_size_for, GraphLayout, NODE_HEADER_HEIGHT, PORT_SPACING,
+};
 use crate::graph_ui::{ConnectionMode, GraphTool, GraphUiState};
 use imp_core_types::{EdgeId, Graph, NodeId};
 
@@ -18,12 +20,7 @@ const ZOOM_STEP: f32 = 1.1;
 const NODE_RADIUS: f32 = 8.0;
 const PORT_RADIUS: f32 = 5.0;
 const PORT_HIT_RADIUS: f32 = 10.0;
-const PORT_SPACING: f32 = 18.0;
 const EDGE_HIT_DISTANCE: f32 = 8.0;
-/// Space reserved for node id + type above the port list in precise mode.
-const NODE_HEADER_HEIGHT: f32 = 40.0;
-/// Slightly wider than simple-mode boxes so input/output labels fit.
-const PRECISE_NODE_WIDTH: f32 = 168.0;
 const PORT_LABEL_GAP: f32 = 6.0;
 const PORT_LABEL_SIZE: f32 = 11.0;
 
@@ -142,17 +139,6 @@ pub fn center_translation(layout: &GraphLayout, viewport: Size, scale: f32) -> V
     )
 }
 
-fn node_size_for(ports: Option<&NodePortInfo>, precise: bool) -> Size {
-    if !precise {
-        return NODE_SIZE;
-    }
-    let rows = ports
-        .map(|ports| ports.inputs.len().max(ports.outputs.len()).max(1))
-        .unwrap_or(1) as f32;
-    let height = (NODE_HEADER_HEIGHT + rows * PORT_SPACING + 4.0).max(NODE_SIZE.height);
-    Size::new(PRECISE_NODE_WIDTH, height)
-}
-
 fn port_position(node_pos: Point, size: Size, index: usize, is_output: bool) -> Point {
     let y = node_pos.y + NODE_HEADER_HEIGHT + PORT_SPACING / 2.0 + index as f32 * PORT_SPACING;
     let x = if is_output {
@@ -200,8 +186,20 @@ impl GraphView {
                 )
             })
             .collect();
+        let precise = ui.connection_mode == ConnectionMode::Precise;
+        let node_sizes = graph
+            .nodes
+            .keys()
+            .map(|id| {
+                let (inputs, outputs) = ports
+                    .get(id)
+                    .map(|info| (info.inputs.len(), info.outputs.len()))
+                    .unwrap_or((0, 0));
+                (id.clone(), node_size_for(inputs, outputs, precise))
+            })
+            .collect();
         Self {
-            layout: layout_graph(graph),
+            layout: layout_graph(graph, &node_sizes),
             document_key,
             tool: ui.tool,
             connection_mode: ui.connection_mode,
@@ -245,15 +243,28 @@ impl GraphView {
     }
 
     fn size_of(&self, node_id: &str) -> Size {
-        node_size_for(
-            self.ports.get(node_id),
-            self.connection_mode == ConnectionMode::Precise,
-        )
+        self.layout
+            .nodes
+            .iter()
+            .find(|node| node.id == node_id)
+            .map(|node| node.size)
+            .unwrap_or_else(|| {
+                let (inputs, outputs) = self
+                    .ports
+                    .get(node_id)
+                    .map(|info| (info.inputs.len(), info.outputs.len()))
+                    .unwrap_or((0, 0));
+                node_size_for(
+                    inputs,
+                    outputs,
+                    self.connection_mode == ConnectionMode::Precise,
+                )
+            })
     }
 
     fn hit_node(&self, world: Point) -> Option<NodeId> {
         for node in self.layout.nodes.iter().rev() {
-            let size = self.size_of(&node.id);
+            let size = node.size;
             let rect = Rectangle::new(node.position, size);
             if rect.contains(world) {
                 return Some(node.id.clone());
@@ -270,7 +281,7 @@ impl GraphView {
             let Some(info) = self.ports.get(&node.id) else {
                 continue;
             };
-            let size = self.size_of(&node.id);
+            let size = node.size;
             for (index, port) in info.inputs.iter().enumerate() {
                 let pos = port_position(node.position, size, index, false);
                 if (pos.x - world.x).hypot(pos.y - world.y) <= PORT_HIT_RADIUS {
@@ -645,7 +656,7 @@ where
         }
 
         for node in &self.layout.nodes {
-            let size = self.size_of(&node.id);
+            let size = node.size;
             let selected = self.selected_node.as_deref() == Some(node.id.as_str())
                 || self.connect_from_node.as_deref() == Some(node.id.as_str());
             let fill = if selected { node_selected } else { node_fill };
@@ -785,7 +796,7 @@ mod tests {
             .join("tests/fixtures/sine.json");
         let text = std::fs::read_to_string(path).expect("read sine fixture");
         let graph: Graph = serde_json::from_str(&text).expect("parse sine fixture");
-        let layout = layout_graph(&graph);
+        let layout = layout_graph(&graph, &BTreeMap::new());
         let viewport = Size::new(800.0, 600.0);
         let translation = center_translation(&layout, viewport, 1.0);
         let center = layout.content_center();
