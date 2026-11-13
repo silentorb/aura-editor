@@ -35,7 +35,7 @@ When reversing a direction: add a brief avoided-approach requirement in design; 
 
 This file governs **aura-editor** only. Orchestration (Compose, Dev Container, multi-repo mounts) lives in **aura-workbench**, not here.
 
-Workspace members include `aura_interfaces`, `aura_ext_builtin`, and `aura_ext_notation`. Imp graph-dag building blocks come from the path dependency on **imp-lab**’s `imp_graph_editor` crate (see [`docs/design/graph-dag.md`](docs/design/graph-dag.md)).
+Workspace members include `aura_interfaces`, `aura_ext_builtin`, and `aura_ext_notation`. Imp Lab path dependencies: `imp_documents` (document session store) and `imp_graph_editor` (graph-dag UI building blocks). See [`docs/design/graph-dag.md`](docs/design/graph-dag.md).
 
 ## Commands
 

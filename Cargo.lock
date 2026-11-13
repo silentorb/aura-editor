@@ -370,6 +370,7 @@ dependencies = [
  "iced_aw",
  "iced_test",
  "imp_core_types 0.5.0",
+ "imp_documents",
  "imp_graph_editor",
  "native-theme-iced",
  "rfd",
@@ -2261,6 +2262,10 @@ version = "0.5.0"
 dependencies = [
  "serde",
 ]
+
+[[package]]
+name = "imp_documents"
+version = "0.1.0"
 
 [[package]]
 name = "imp_graph_editor"
