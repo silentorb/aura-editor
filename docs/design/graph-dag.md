@@ -10,9 +10,9 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 
 ## Implementation crate
 
-- Canvas, layout, pure edit helpers, UI prefs state, and lightweight toolbar/properties **building blocks** live in the Aura-free workspace crate `imp_graph_editor`.
-- Aura Editor hosts compose those blocks into the product toolbar, Properties pane, menus, commands, Aura JSON save format, and Aura node-type registry wiring.
-- `imp_graph_editor` must not depend on `aura_*` crates, so a future extract into a separate Imp editor repo stays mostly packaging.
+- Canvas, layout, pure edit helpers, UI prefs state, and lightweight toolbar/properties **building blocks** live in the Aura-free `imp_graph_editor` crate in **imp-lab**.
+- Aura Editor depends on that crate and hosts compose those blocks into the product toolbar, Properties pane, menus, commands, Aura JSON save format, and Aura node-type registry wiring.
+- `imp_graph_editor` must not depend on `aura_*` crates.
 
 ## Tools
 
