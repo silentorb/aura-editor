@@ -46,3 +46,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 iced_test = "0.14"
+
+# Keep workspace crates debuggable with line tables; omit dependency debuginfo so
+# stale Cargo fingerprints cannot balloon target/ (Iced/wgpu debug binaries are huge).
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+

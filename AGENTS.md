@@ -48,6 +48,8 @@ cargo clippy --workspace
 cargo run
 ```
 
+`dev` keeps line-table debuginfo for workspace crates and omits debuginfo for dependency packages so `target/` stays bounded. If `target/` exceeds ~8 GiB, clean it (`cargo clean`, or the workbench script/task **Clean editor target if large**); a huge `target/` is a defect, not expected.
+
 ## Naming
 
 Repos and projects use **kebab-case** (`aura-editor`). Rust crates use **snake_case** (`aura_editor`).
