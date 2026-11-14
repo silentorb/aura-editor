@@ -16,6 +16,7 @@ impl NodeTypeCatalog for RegistryCatalog<'_> {
                     id: port.id.clone(),
                     // Serialize via Aura's Imp types (may differ from editor path dep).
                     signal_key: serde_json::to_string(&port.signal_type).unwrap_or_default(),
+                    variadic: port.variadic,
                 })
                 .collect(),
         )
@@ -29,6 +30,7 @@ impl NodeTypeCatalog for RegistryCatalog<'_> {
                 .map(|port| CatalogPort {
                     id: port.id.clone(),
                     signal_key: serde_json::to_string(&port.signal_type).unwrap_or_default(),
+                    variadic: false,
                 })
                 .collect(),
         )

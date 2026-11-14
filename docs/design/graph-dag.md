@@ -36,10 +36,18 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 
 ### Auto-pair rules (Simple)
 
-1. Prefer unused target input ports (no existing edge into that port).
+1. Prefer unused **singleton** target input ports (no existing edge into that port).
 2. Prefer output→input pairs whose signal types are compatible when type information is available.
-3. Otherwise take the first remaining free output→input pair.
-4. Fail if none remain.
+3. Otherwise take the first remaining free singleton output→input pair.
+4. If only **variadic** inputs remain available, append another edge to a compatible variadic port (assigning the next `Edge.order`).
+5. Fail if none remain.
+
+### Variadic inputs (Precise)
+
+- Catalog ports marked `variadic` expand into one left-side handle per inbound edge (sorted by `Edge.order`), plus a trailing empty **dummy** handle for appending a new connection.
+- Precise connect targets the dummy (append) or a singleton input; filled variadic handles are not connect targets.
+- New edges into a variadic port store a unique `order` (`0..n-1` contiguous after reorder).
+- With the **Select** tool in Precise mode, drag a filled variadic handle vertically among its siblings to reorder; on drop, `Edge.order` values are rewritten. The dummy is not reorderable.
 
 ## Toolbar
 

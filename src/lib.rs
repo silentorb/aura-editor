@@ -32,11 +32,11 @@ pub use aura_graph_json::graph_to_aura_json;
 pub use graph_file::OpenError;
 pub use imp_graph_editor::{
     add_edge, add_node, add_type_picker, auto_pair_ports, center_translation, clamp_scale,
-    graph_canvas, layout_graph, node_properties_editor, pan_by, precise_ports_checkbox,
-    remove_edge, remove_edges_between, remove_node, rename_node, set_node_type, tool_strip,
-    unique_node_id, zoom_at_point, ConnectionMode, GraphChromeMessage, GraphEdit, GraphEditError,
-    CatalogPort, ConnectDraft, GraphLayout, GraphTool, GraphUiEntry, GraphUiState, GraphView,
-    LaidOutNode, NodePortInfo, NodeTypeCatalog, PortCatalog,
+    graph_canvas, layout_graph, node_properties_editor, pan_by, precise_ports_checkbox, remove_edge,
+    remove_edges_between, remove_node, rename_node, reorder_variadic_inputs, set_node_type,
+    tool_strip, unique_node_id, zoom_at_point, CatalogPort, ConnectDraft, ConnectionMode,
+    GraphChromeMessage, GraphEdit, GraphEditError, GraphLayout, GraphTool, GraphUiEntry,
+    GraphUiState, GraphView, LaidOutNode, NodePortInfo, NodeTypeCatalog, PortCatalog,
 };
 pub use logging::init_logging;
 pub use piano_roll_ui::{PianoRollUiEntry, PianoRollUiState};
@@ -934,8 +934,10 @@ impl App {
                     return Task::none();
                 };
                 match auto_pair_ports(&catalog, graph, &from, &to) {
-                    Ok((from_port, to_port)) => {
-                        if let Err(error) = add_edge(graph, from, from_port, to, to_port) {
+                    Ok((from_port, to_port, variadic_target)) => {
+                        if let Err(error) =
+                            add_edge(graph, from, from_port, to, to_port, variadic_target)
+                        {
                             self.status_notice = Some(error.to_string());
                         } else {
                             doc.dirty = true;
@@ -953,6 +955,7 @@ impl App {
                 from_port,
                 to_node,
                 to_port,
+                variadic_target,
             } => {
                 let Some(doc) = self.documents.get_mut(document_id) else {
                     return Task::none();
@@ -960,13 +963,35 @@ impl App {
                 let Some(graph) = doc.payload.graph_mut() else {
                     return Task::none();
                 };
-                if let Err(error) = add_edge(graph, from_node, from_port, to_node, to_port) {
+                if let Err(error) =
+                    add_edge(graph, from_node, from_port, to_node, to_port, variadic_target)
+                {
                     self.status_notice = Some(error.to_string());
                 } else {
                     doc.dirty = true;
                     self.status_notice = None;
                 }
                 self.graph_ui.connect_draft = None;
+            }
+            GraphEdit::ReorderVariadicInputs {
+                node_id,
+                port,
+                ordered_edge_ids,
+            } => {
+                let Some(doc) = self.documents.get_mut(document_id) else {
+                    return Task::none();
+                };
+                let Some(graph) = doc.payload.graph_mut() else {
+                    return Task::none();
+                };
+                if let Err(error) =
+                    reorder_variadic_inputs(graph, &node_id, &port, &ordered_edge_ids)
+                {
+                    self.status_notice = Some(error.to_string());
+                } else {
+                    doc.dirty = true;
+                    self.status_notice = None;
+                }
             }
             GraphEdit::EraseNode { node_id } => {
                 let Some(doc) = self.documents.get_mut(document_id) else {
@@ -1645,7 +1670,15 @@ fn build_port_catalog(
     for node in graph.nodes.values() {
         let mut info = NodePortInfo::default();
         if let Some(def) = get_node_type(&registry, &node.node_type) {
-            info.inputs = def.inputs.keys().cloned().collect();
+            info.inputs = def
+                .inputs
+                .values()
+                .map(|port| CatalogPort {
+                    id: port.id.clone(),
+                    signal_key: serde_json::to_string(&port.signal_type).unwrap_or_default(),
+                    variadic: port.variadic,
+                })
+                .collect();
             info.outputs = def.outputs.keys().cloned().collect();
         }
         catalog.insert(node.id.clone(), info);
