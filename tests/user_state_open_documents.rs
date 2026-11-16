@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use aura_editor::{
-    App, Bindings, ExtensionRuntime, Message, UserDir, USER_STATE_BUCKET_DOCUMENTS,
+    App, Bindings, DocumentOrigin, ExtensionRuntime, Message, UserDir, USER_STATE_BUCKET_DOCUMENTS,
     USER_STATE_OPEN_DOCUMENTS,
 };
 
@@ -84,12 +84,20 @@ fn missing_path_on_restore_is_skipped() {
     let bucket_path = user_dir.bucket_path(USER_STATE_BUCKET_DOCUMENTS);
     let mut value: serde_json::Value =
         serde_json::from_str(&fs::read_to_string(&bucket_path).unwrap()).unwrap();
-    value["entries"]["open-documents"]["openPaths"] = serde_json::json!([
-        missing.to_string_lossy(),
-        sine.to_string_lossy()
+    value["entries"]["open-documents"]["openDocuments"] = serde_json::json!([
+        { "kind": "filesystem", "path": missing.to_string_lossy() },
+        { "kind": "filesystem", "path": sine.to_string_lossy() }
     ]);
-    value["entries"]["open-documents"]["activePath"] =
-        serde_json::json!(sine.to_string_lossy());
+    value["entries"]["open-documents"]["active"] =
+        serde_json::json!({ "kind": "filesystem", "path": sine.to_string_lossy() });
+    value["entries"]["open-documents"]
+        .as_object_mut()
+        .unwrap()
+        .remove("openPaths");
+    value["entries"]["open-documents"]
+        .as_object_mut()
+        .unwrap()
+        .remove("activePath");
     fs::write(&bucket_path, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
 
     let restored = app_with_user_dir(user_dir.clone());
@@ -101,6 +109,42 @@ fn missing_path_on_restore_is_skipped() {
             .and_then(|doc| doc.path.as_deref()),
         Some(sine.as_path())
     );
+
+    let _ = fs::remove_dir_all(user_dir.path());
+}
+
+#[test]
+fn restores_miro_workspace_and_node_tabs() {
+    let user_dir = temp_user_dir("miro-restore");
+    fs::create_dir_all(user_dir.path()).unwrap();
+    let workspace = user_dir.path().join("workspace");
+    fs::create_dir_all(&workspace).unwrap();
+    fs::copy(fixture("sine.json"), workspace.join("sine.json")).unwrap();
+
+    const SINE_OSC_NODE: &str = "0033AFBGAY03CEW3Z5AP3J086B";
+
+    {
+        let mut app = app_with_user_dir(user_dir.clone());
+        // Disk-backed workspace so restore can reopen the same content root.
+        app.open_miro_workspace(&workspace).expect("workspace");
+        let _ = app.update(Message::OpenMiroNodeId(SINE_OSC_NODE.into()));
+        app.flush_user_state_now();
+        // Drop the session before restore so the SQLite projection is not locked.
+    }
+
+    let restored = app_with_user_dir(user_dir.clone());
+    assert_eq!(restored.documents().documents().len(), 1);
+    assert_eq!(
+        restored.documents().active_document().and_then(|doc| {
+            restored.documents().origin(doc.id).cloned()
+        }),
+        Some(DocumentOrigin::Miro {
+            content_root: workspace.clone(),
+            node_id: SINE_OSC_NODE.into(),
+            mir_record_id: "sine.json".into(),
+        })
+    );
+    assert!(restored.miro_session().is_some());
 
     let _ = fs::remove_dir_all(user_dir.path());
 }

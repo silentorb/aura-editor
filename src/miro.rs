@@ -1,7 +1,7 @@
 //! Durable Miro pull workflow: session handle helpers and NodeId → stacked open.
 //!
-//! Product File → Open remains filesystem-only. Callers (tests, later UI / node-ref
-//! navigation) use [`open_miro_node`] to resolve a NodeId through the Aura host
+//! Product open is Miro-first (workspace + NodeId). Callers (File → Open…, missing-card
+//! resolve, tests) use [`open_miro_node`] to resolve a NodeId through the Aura host
 //! index, pull the Mir blob, and materialize it into [`crate::ModelGraph`].
 
 use std::path::{Path, PathBuf};

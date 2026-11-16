@@ -32,12 +32,18 @@ Declarative requirements for ephemeral Aura Editor user-state persistence. Produ
   "version": 1,
   "entries": {
     "open-documents": {
-      "openPaths": ["/abs/a.json", "/abs/b.json"],
-      "activePath": "/abs/b.json"
+      "contentRoot": "/abs/workspace",
+      "openDocuments": [
+        { "kind": "miro", "nodeId": "01JNODEAAAAAAAAAAAAAAA0001" },
+        { "kind": "filesystem", "path": "/abs/other.json" }
+      ],
+      "active": { "kind": "miro", "nodeId": "01JNODEAAAAAAAAAAAAAAA0001" }
     }
   }
 }
 ```
+
+Legacy `openPaths` / `activePath` entries are still read for migration when `openDocuments` is empty.
 
 ## Persistence mechanics
 
@@ -55,10 +61,10 @@ Declarative requirements for ephemeral Aura Editor user-state persistence. Produ
 
 ## Open documents (first consumer)
 
-- Entry shape: ordered `openPaths` plus optional `activePath`.
-- Collect after open, activate, and close; apply once at startup by reopening paths through the normal document open pipeline, then selecting the active path when still open.
-- Only documents with a real filesystem path are collected; untitled notation tabs are omitted.
-- Paths that fail to open are skipped with a warning; startup is not blocked.
+- Entry shape: optional `contentRoot` (Miro workspace), ordered `openDocuments` (`miro` NodeId or `filesystem` path), optional `active` of the same shape.
+- Collect after open, activate, close, and workspace change; apply once at startup by reopening the workspace (when set), then each document (Miro pull by NodeId or filesystem open), then selecting the active entry when still open.
+- Untitled tabs are omitted. Miro tabs are stored by NodeId (not authoring path).
+- Entries that fail to open are skipped with a warning; startup is not blocked.
 - Canvas pan/zoom is not persisted (see product non-goals).
 
 ## Piano roll UI

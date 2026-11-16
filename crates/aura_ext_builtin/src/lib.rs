@@ -4,10 +4,10 @@ mod document_types;
 
 use aura_interfaces::{
     CommandDescriptor, CommandHost, DocumentTypeHost, UserStateDescriptor, UserStateHost,
-    ViewDescriptor, ViewHost, CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_NEW_GRAPH, CMD_DOCUMENT_OPEN,
-    CMD_GRAPH_ADD_NODE, CMD_GRAPH_DELETE_SELECTION, CMD_PLAY_START, CMD_PLAY_STOP, CMD_PLAY_TOGGLE,
-    ROLE_IMP_GRAPH, USER_STATE_GRAPH_DAG_UI, USER_STATE_OPEN_DOCUMENTS, USER_STATE_SHELL_LAYOUT,
-    VIEW_GRAPH_DAG,
+    ViewDescriptor, ViewHost, CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_NEW_GRAPH,
+    CMD_DOCUMENT_OPEN, CMD_DOCUMENT_OPEN_FILE, CMD_DOCUMENT_OPEN_WORKSPACE, CMD_GRAPH_ADD_NODE,
+    CMD_GRAPH_DELETE_SELECTION, CMD_PLAY_START, CMD_PLAY_STOP, CMD_PLAY_TOGGLE, ROLE_IMP_GRAPH,
+    USER_STATE_GRAPH_DAG_UI, USER_STATE_OPEN_DOCUMENTS, USER_STATE_SHELL_LAYOUT, VIEW_GRAPH_DAG,
 };
 
 use crate::document_types::register_document_types;
@@ -16,7 +16,15 @@ use crate::document_types::register_document_types;
 pub fn register(host: &mut (impl CommandHost + ViewHost + DocumentTypeHost + UserStateHost)) {
     host.register_command(
         CMD_DOCUMENT_OPEN,
-        CommandDescriptor::with_label("Open document"),
+        CommandDescriptor::with_label("Open by NodeId"),
+    );
+    host.register_command(
+        CMD_DOCUMENT_OPEN_WORKSPACE,
+        CommandDescriptor::with_label("Open workspace"),
+    );
+    host.register_command(
+        CMD_DOCUMENT_OPEN_FILE,
+        CommandDescriptor::with_label("Open file"),
     );
     host.register_command(
         CMD_DOCUMENT_CLOSE_ACTIVE,

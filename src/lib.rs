@@ -53,8 +53,8 @@ pub use shell_layout::{
     ShellLayoutTree, ShellPanelId, SHELL_LAYOUT_ENTRY_VERSION,
 };
 pub use user_state::{
-    write_atomic, OpenDocumentsEntry, UserDir, UserStateError, UserStateStore, BUCKET_SCHEMA_VERSION,
-    DEBOUNCE, DEFAULT_USER_DIR_NAME, USER_DIR_ENV,
+    write_atomic, OpenDocumentRef, OpenDocumentsEntry, UserDir, UserStateError, UserStateStore,
+    BUCKET_SCHEMA_VERSION, DEBOUNCE, DEFAULT_USER_DIR_NAME, USER_DIR_ENV,
 };
 
 pub use aura_ext_notation::{
@@ -62,14 +62,14 @@ pub use aura_ext_notation::{
 };
 pub use aura_interfaces::{
     CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_NEW_GRAPH, CMD_DOCUMENT_NEW_NOTATION, CMD_DOCUMENT_OPEN,
-    CMD_DOCUMENT_SAVE, CMD_GRAPH_ADD_NODE, CMD_GRAPH_DELETE_SELECTION, CMD_NOTATION_SNAP_TOGGLE,
-    CMD_NOTATION_TOOL_DRAW, CMD_NOTATION_TOOL_ERASE, CMD_NOTATION_TOOL_SELECT, CMD_PLAY_START,
-    CMD_PLAY_STOP, CMD_PLAY_TOGGLE, DOC_TYPE_AURA_JSON, DOC_TYPE_IMP_GRAPH,
-    DOC_TYPE_IMP_GRAPH_LIBRARY, DOC_TYPE_JSON, DOC_TYPE_NOTATION, ROLE_IMP_GRAPH, ROLE_JSON,
-    ROLE_NOTATION, USER_STATE_BUCKET_BUILTIN, USER_STATE_BUCKET_DOCUMENTS,
-    USER_STATE_BUCKET_NOTATION, USER_STATE_BUCKET_SHELL, USER_STATE_GRAPH_DAG_UI,
-    USER_STATE_OPEN_DOCUMENTS, USER_STATE_PIANO_ROLL_UI, USER_STATE_SHELL_LAYOUT, VIEW_GRAPH_DAG,
-    VIEW_PIANO_ROLL,
+    CMD_DOCUMENT_OPEN_FILE, CMD_DOCUMENT_OPEN_WORKSPACE, CMD_DOCUMENT_SAVE, CMD_GRAPH_ADD_NODE,
+    CMD_GRAPH_DELETE_SELECTION, CMD_NOTATION_SNAP_TOGGLE, CMD_NOTATION_TOOL_DRAW,
+    CMD_NOTATION_TOOL_ERASE, CMD_NOTATION_TOOL_SELECT, CMD_PLAY_START, CMD_PLAY_STOP,
+    CMD_PLAY_TOGGLE, DOC_TYPE_AURA_JSON, DOC_TYPE_IMP_GRAPH, DOC_TYPE_IMP_GRAPH_LIBRARY,
+    DOC_TYPE_JSON, DOC_TYPE_NOTATION, ROLE_IMP_GRAPH, ROLE_JSON, ROLE_NOTATION,
+    USER_STATE_BUCKET_BUILTIN, USER_STATE_BUCKET_DOCUMENTS, USER_STATE_BUCKET_NOTATION,
+    USER_STATE_BUCKET_SHELL, USER_STATE_GRAPH_DAG_UI, USER_STATE_OPEN_DOCUMENTS,
+    USER_STATE_PIANO_ROLL_UI, USER_STATE_SHELL_LAYOUT, VIEW_GRAPH_DAG, VIEW_PIANO_ROLL,
 };
 
 use std::collections::HashMap;
@@ -78,11 +78,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aura_imp::{aura_registry, get_node_type, list_node_types};
-use aura_integration::MiroSession;
+use aura_integration::{resolve_local_node, MiroNodeIndex, MiroSession};
 use aura_io_cpal::PlaybackEngine;
 use aura_sample::SampleRate;
 use iced::keyboard::{self, key::Named, Key, Modifiers};
-use iced::widget::{button, column, container, pane_grid, pick_list, row, stack, text, Space};
+use iced::widget::{
+    button, column, container, pane_grid, pick_list, row, scrollable, stack, text, text_input,
+    Space,
+};
 use iced::{time, Alignment, Color, Element, Fill, Length, Padding, Renderer, Subscription, Task,
     Theme};
 use iced_aw::menu::{Menu, MenuBar};
@@ -103,11 +106,22 @@ use crate::playback::{
 /// Idle pause before committing Properties id edits into the graph.
 pub const TITLE_DEBOUNCE: Duration = Duration::from_millis(500);
 
+/// Session-only NodeId open picker state.
+#[derive(Debug, Clone, Default)]
+struct OpenNodeDialog {
+    /// Case-insensitive substring filter over NodeId / kind.
+    filter: String,
+    /// Currently highlighted NodeId.
+    selected: Option<String>,
+}
+
 /// Root application state for the editor shell.
 pub struct App {
     documents: DocumentStore,
-    /// Optional Miro session (parallel pull workflow; not menu-attached yet).
+    /// Optional Miro session for the open workspace (primary document workflow).
     miro: Option<MiroSession>,
+    /// Cached NodeId index for the open workspace (rebuilt on workspace open / Open…).
+    miro_index: Option<MiroNodeIndex>,
     /// Last open/load/save error shown in the status banner.
     last_error: Option<OpenError>,
     /// Non-open status text (playback errors and notices).
@@ -124,6 +138,8 @@ pub struct App {
     graph_ui: GraphUiState,
     /// Open Add-node dialog type selection (session-only).
     add_node_dialog: Option<String>,
+    /// Open-by-NodeId dialog (session-only).
+    open_node_dialog: Option<OpenNodeDialog>,
     /// Generation token for debounced Properties rename commits.
     title_commit_generation: u64,
     /// Parked playhead beats keyed by open notation document.
@@ -166,10 +182,22 @@ fn load_native_theme() -> (Theme, ResolvedTheme, AccessibilityPreferences) {
 /// Messages produced by the multi-document shell.
 #[derive(Debug, Clone)]
 pub enum Message {
-    /// User chose Open… (legacy message; menus use [`Message::Command`]).
+    /// User chose Open File… (legacy OpenClicked; menus use [`Message::Command`]).
     OpenClicked,
-    /// Open the document at this path (from the dialog or tests).
+    /// Open a filesystem document at this path (Open File… or tests).
     OpenPath(PathBuf),
+    /// Open (or replace) the Miro workspace at this content root.
+    OpenWorkspacePath(PathBuf),
+    /// Open a Miro NodeId tab (from the NodeId picker or tests).
+    OpenMiroNodeId(String),
+    /// Filter text in the NodeId open dialog.
+    OpenNodeFilter(String),
+    /// Highlight a NodeId in the open dialog.
+    OpenNodeSelect(String),
+    /// Confirm the NodeId open dialog.
+    OpenNodeConfirm,
+    /// Cancel the NodeId open dialog.
+    OpenNodeCancel,
     /// Opening a path failed.
     OpenFailed(OpenError),
     /// User cancelled the native file dialog.
@@ -248,6 +276,7 @@ impl std::fmt::Debug for App {
         f.debug_struct("App")
             .field("documents", &self.documents)
             .field("miro_open", &self.miro.is_some())
+            .field("miro_index_len", &self.miro_index.as_ref().map(|i| i.len()))
             .field("last_error", &self.last_error)
             .field("status_notice", &self.status_notice)
             .field("bindings", &self.bindings)
@@ -256,6 +285,7 @@ impl std::fmt::Debug for App {
             .field("piano_roll_ui", &self.piano_roll_ui)
             .field("graph_ui", &self.graph_ui)
             .field("add_node_dialog", &self.add_node_dialog)
+            .field("open_node_dialog", &self.open_node_dialog)
             .field("title_commit_generation", &self.title_commit_generation)
             .field("playheads", &self.playheads)
             .field("playback_end_secs", &self.playback_end_secs)
@@ -292,6 +322,7 @@ impl App {
         Self {
             documents: DocumentStore::default(),
             miro: None,
+            miro_index: None,
             last_error: None,
             status_notice: None,
             bindings,
@@ -300,6 +331,7 @@ impl App {
             piano_roll_ui: PianoRollUiState::default(),
             graph_ui: GraphUiState::new("sine"),
             add_node_dialog: None,
+            open_node_dialog: None,
             title_commit_generation: 0,
             playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
@@ -326,6 +358,7 @@ impl App {
         let mut app = Self {
             documents: DocumentStore::default(),
             miro: None,
+            miro_index: None,
             last_error: None,
             status_notice: None,
             bindings,
@@ -334,6 +367,7 @@ impl App {
             piano_roll_ui,
             graph_ui,
             add_node_dialog: None,
+            open_node_dialog: None,
             title_commit_generation: 0,
             playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
@@ -353,11 +387,12 @@ impl App {
     }
 
     /// Opens or replaces the Miro session for `content_root` (host DB under `.aura/`).
-    ///
-    /// Not attached to File menu yet; tests and later UI call this directly.
     pub fn open_miro_workspace(&mut self, content_root: impl Into<PathBuf>) -> Result<(), MiroOpenError> {
-        let session = open_miro_session(content_root)?;
+        let content_root = content_root.into();
+        let session = open_miro_session(content_root.clone())?;
+        let index = miro_node_index(&content_root)?;
         self.miro = Some(session);
+        self.miro_index = Some(index);
         self.last_error = None;
         Ok(())
     }
@@ -367,9 +402,26 @@ impl App {
         &mut self,
         content_root: impl Into<PathBuf>,
     ) -> Result<(), MiroOpenError> {
-        let session = open_miro_session_in_memory(content_root)?;
+        let content_root = content_root.into();
+        let session = open_miro_session_in_memory(content_root.clone())?;
+        let index = miro_node_index(&content_root)?;
         self.miro = Some(session);
+        self.miro_index = Some(index);
         self.last_error = None;
+        Ok(())
+    }
+
+    /// Rebuilds the cached NodeId index from the active workspace content root.
+    pub fn refresh_miro_index(&mut self) -> Result<(), MiroOpenError> {
+        let Some(session) = self.miro.as_ref() else {
+            self.miro_index = None;
+            return Err(MiroOpenError::Document(OpenError::Invalid {
+                path: PathBuf::from("miro"),
+                reason: String::from("no Miro session open"),
+            }));
+        };
+        let index = miro_node_index(session.content_root())?;
+        self.miro_index = Some(index);
         Ok(())
     }
 
@@ -390,10 +442,13 @@ impl App {
             .expect("checked")
             .content_root()
             .to_path_buf();
-        let index = miro_node_index(&content_root)?;
+        if self.miro_index.is_none() {
+            self.refresh_miro_index()?;
+        }
+        let index = self.miro_index.as_ref().expect("refreshed");
         let pulled = {
             let session = self.miro.as_mut().expect("checked");
-            open_miro_node(&self.extensions, session, &index, node_id)?
+            open_miro_node(&self.extensions, session, index, node_id)?
         };
         let mir_record_id = pulled.node_ref.mir_record_id.clone();
         let id = self
@@ -576,6 +631,47 @@ impl App {
                     self.last_error = Some(error);
                 }
             },
+            Message::OpenWorkspacePath(path) => match self.open_miro_workspace(&path) {
+                Ok(()) => {
+                    self.status_notice = Some(format!("Workspace: {}", path.display()));
+                    return self.sync_open_documents_task();
+                }
+                Err(error) => {
+                    self.last_error = Some(error.into_open_error());
+                }
+            },
+            Message::OpenMiroNodeId(node_id) => match self.open_miro_node_tab(&node_id) {
+                Ok(_) => {
+                    self.open_node_dialog = None;
+                    self.status_notice = None;
+                    return self.sync_open_documents_task();
+                }
+                Err(error) => {
+                    self.last_error = Some(error.into_open_error());
+                }
+            },
+            Message::OpenNodeFilter(filter) => {
+                if let Some(dialog) = self.open_node_dialog.as_mut() {
+                    dialog.filter = filter;
+                }
+            }
+            Message::OpenNodeSelect(node_id) => {
+                if let Some(dialog) = self.open_node_dialog.as_mut() {
+                    dialog.selected = Some(node_id);
+                }
+            }
+            Message::OpenNodeConfirm => {
+                let selected = self
+                    .open_node_dialog
+                    .as_ref()
+                    .and_then(|d| d.selected.clone());
+                if let Some(node_id) = selected {
+                    return self.update(Message::OpenMiroNodeId(node_id));
+                }
+            }
+            Message::OpenNodeCancel => {
+                self.open_node_dialog = None;
+            }
             Message::OpenFailed(error) => {
                 self.last_error = Some(error);
             }
@@ -613,6 +709,14 @@ impl App {
                     }
                     return Task::none();
                 }
+                if self.open_node_dialog.is_some() {
+                    if matches!(key, Key::Named(Named::Escape)) {
+                        self.open_node_dialog = None;
+                    } else if matches!(key, Key::Named(Named::Enter)) {
+                        return self.update(Message::OpenNodeConfirm);
+                    }
+                    return Task::none();
+                }
                 if self.active_is_graph() && modifiers.is_empty() {
                     if let Some(command) = graph_command_for_key(&key) {
                         return self.update(Message::Command(CommandId::new(command)));
@@ -627,7 +731,28 @@ impl App {
                     return Task::none();
                 }
                 match command.as_str() {
-                    CMD_DOCUMENT_OPEN => return pick_open_file(),
+                    CMD_DOCUMENT_OPEN_WORKSPACE => return pick_workspace_folder(),
+                    CMD_DOCUMENT_OPEN_FILE => return pick_open_file(),
+                    CMD_DOCUMENT_OPEN => {
+                        if self.miro.is_none() {
+                            self.status_notice =
+                                Some(String::from("Open a workspace before opening by NodeId"));
+                            return pick_workspace_folder();
+                        }
+                        if let Err(error) = self.refresh_miro_index() {
+                            self.last_error = Some(error.into_open_error());
+                            return Task::none();
+                        }
+                        let selected = self
+                            .miro_index
+                            .as_ref()
+                            .and_then(|index| index.iter().next().map(|(id, _)| id.to_string()));
+                        self.open_node_dialog = Some(OpenNodeDialog {
+                            filter: String::new(),
+                            selected,
+                        });
+                        return Task::none();
+                    }
                     CMD_DOCUMENT_CLOSE_ACTIVE => {
                         if let Some(id) = self.documents.active_id() {
                             self.documents.close(id);
@@ -1053,6 +1178,9 @@ impl App {
                 self.invalidate_pending_title_commit();
                 self.graph_ui.select_edge(edge_id);
             }
+            GraphEdit::OpenNode { node_id } => {
+                return self.handle_open_node(document_id, node_id);
+            }
             GraphEdit::AddNode => {
                 let Some(doc) = self.documents.get_mut(document_id) else {
                     return Task::none();
@@ -1388,34 +1516,62 @@ impl App {
             return;
         };
 
-        for path in entry.open_paths {
-            match self.extensions.open_document(&path) {
-                Ok(opened) => {
-                    if self
-                        .documents
-                        .open_or_activate_stacked(path.clone(), opened)
-                        .is_none()
-                    {
-                        warn!(
-                            path = %path.display(),
-                            "skipped restoring document; unsupported tip payload"
-                        );
+        if let Some(content_root) = entry.content_root.clone() {
+            if let Err(error) = self.open_miro_workspace(&content_root) {
+                warn!(
+                    path = %content_root.display(),
+                    %error,
+                    "skipped restoring Miro workspace"
+                );
+            }
+        }
+
+        for doc_ref in entry.effective_open() {
+            match doc_ref {
+                OpenDocumentRef::Filesystem { path } => {
+                    match self.extensions.open_document(&path) {
+                        Ok(opened) => {
+                            if self
+                                .documents
+                                .open_or_activate_stacked(path.clone(), opened)
+                                .is_none()
+                            {
+                                warn!(
+                                    path = %path.display(),
+                                    "skipped restoring document; unsupported tip payload"
+                                );
+                            }
+                        }
+                        Err(error) => {
+                            warn!(
+                                path = %path.display(),
+                                %error,
+                                "skipped restoring document"
+                            );
+                        }
                     }
                 }
-                Err(error) => {
-                    warn!(
-                        path = %path.display(),
-                        %error,
-                        "skipped restoring document"
-                    );
+                OpenDocumentRef::Miro { node_id } => {
+                    if let Err(error) = self.open_miro_node_tab(&node_id) {
+                        warn!(node_id = %node_id, %error, "skipped restoring Miro document");
+                    }
                 }
             }
         }
 
-        if let Some(active_path) = entry.active_path {
-            if let Some(doc) = self.documents.find_by_path(&active_path) {
-                let id = doc.id;
-                self.documents.select(id);
+        if let Some(active) = entry.effective_active() {
+            match active {
+                OpenDocumentRef::Filesystem { path } => {
+                    if let Some(doc) = self.documents.find_by_path(&path) {
+                        let id = doc.id;
+                        self.documents.select(id);
+                    }
+                }
+                OpenDocumentRef::Miro { node_id } => {
+                    if let Some(id) = self.documents.find_miro_by_node_id(&node_id) {
+                        self.documents.select(id);
+                    }
+                }
             }
         }
     }
@@ -1424,17 +1580,38 @@ impl App {
         let Some(binding) = self.open_documents_binding().cloned() else {
             return Task::none();
         };
+        let open_documents: Vec<OpenDocumentRef> = self
+            .documents
+            .documents()
+            .iter()
+            .filter_map(|doc| {
+                let origin = self.documents.origin(doc.id)?;
+                match origin {
+                    DocumentOrigin::Filesystem { path } => Some(OpenDocumentRef::Filesystem {
+                        path: path.clone(),
+                    }),
+                    DocumentOrigin::Miro { node_id, .. } => Some(OpenDocumentRef::Miro {
+                        node_id: node_id.clone(),
+                    }),
+                }
+            })
+            .collect();
+        let active = self.documents.active_id().and_then(|id| {
+            let origin = self.documents.origin(id)?;
+            match origin {
+                DocumentOrigin::Filesystem { path } => Some(OpenDocumentRef::Filesystem {
+                    path: path.clone(),
+                }),
+                DocumentOrigin::Miro { node_id, .. } => Some(OpenDocumentRef::Miro {
+                    node_id: node_id.clone(),
+                }),
+            }
+        });
         let entry = OpenDocumentsEntry {
-            open_paths: self
-                .documents
-                .documents()
-                .iter()
-                .filter_map(|doc| doc.path.clone())
-                .collect(),
-            active_path: self
-                .documents
-                .active_document()
-                .and_then(|doc| doc.path.clone()),
+            content_root: self.miro.as_ref().map(|s| s.content_root().to_path_buf()),
+            open_documents,
+            active,
+            ..Default::default()
         };
         let generation = match self
             .user_state
@@ -1447,6 +1624,106 @@ impl App {
             }
         };
         self.schedule_user_state_flush(generation)
+    }
+
+    fn handle_open_node(&mut self, document_id: DocumentId, node_id: String) -> Task<Message> {
+        if self.documents.active_id() != Some(document_id) {
+            return Task::none();
+        }
+        self.invalidate_pending_title_commit();
+
+        let already_local = self
+            .documents
+            .get(document_id)
+            .and_then(|doc| doc.payload.graph())
+            .is_some_and(|graph| graph.nodes.contains_key(&node_id));
+
+        let title = self
+            .documents
+            .get(document_id)
+            .and_then(|doc| doc.payload.graph())
+            .and_then(|graph| graph.nodes.get(&node_id))
+            .and_then(|node| node.title.clone())
+            .unwrap_or_default();
+        self.graph_ui.select_node(Some(node_id.clone()), title);
+
+        if self.miro.is_none() {
+            self.status_notice = Some(String::from("Open a workspace to resolve missing nodes"));
+            return Task::none();
+        }
+        if let Err(error) = self.refresh_miro_index() {
+            self.status_notice = Some(error.to_string());
+            return Task::none();
+        }
+
+        let kind = {
+            let Some(index) = self.miro_index.as_ref() else {
+                return Task::none();
+            };
+            match index.get(&node_id) {
+                Some(node_ref) => node_ref.kind.clone(),
+                None => {
+                    self.status_notice =
+                        Some(format!("No Miro record indexed for node `{node_id}`"));
+                    return Task::none();
+                }
+            }
+        };
+
+        if !already_local {
+            let resolved = {
+                let Some(session) = self.miro.as_ref() else {
+                    return Task::none();
+                };
+                let Some(index) = self.miro_index.as_ref() else {
+                    return Task::none();
+                };
+                match resolve_local_node(session, index, &node_id) {
+                    Ok(resolved) => resolved,
+                    Err(error) => {
+                        self.status_notice = Some(error.to_string());
+                        return Task::none();
+                    }
+                }
+            };
+            let Some(doc) = self.documents.get_mut(document_id) else {
+                return Task::none();
+            };
+            let Some(graph) = doc.payload.graph_mut() else {
+                return Task::none();
+            };
+            let title = resolved.node.title.clone().unwrap_or_default();
+            // Engine and editor may resolve distinct `imp_core_types` path deps; bridge via JSON.
+            let node: imp_core_types::Node = match serde_json::from_value(
+                serde_json::to_value(&resolved.node).unwrap_or(serde_json::Value::Null),
+            ) {
+                Ok(node) => node,
+                Err(error) => {
+                    self.status_notice = Some(format!("failed to map resolved node: {error}"));
+                    return Task::none();
+                }
+            };
+            graph.nodes.insert(node_id.clone(), node);
+            doc.dirty = true;
+            self.graph_ui.select_node(Some(node_id.clone()), title);
+            self.status_notice = None;
+        }
+
+        let roles = roles_for_miro_kind(&kind);
+        if self.extensions.resolve_view_for_chain(&roles).is_some() {
+            match self.open_miro_node_tab(&node_id) {
+                Ok(_) => {
+                    self.status_notice = None;
+                    return self.sync_open_documents_task();
+                }
+                Err(error) => {
+                    self.status_notice = Some(error.to_string());
+                }
+            }
+        } else if already_local {
+            self.status_notice = Some(String::from("No document view mapped for this node"));
+        }
+        Task::none()
     }
 
     fn sync_piano_roll_ui_task(&mut self) -> Task<Message> {
@@ -1530,7 +1807,7 @@ impl App {
                     .active_document()
                     .and_then(|doc| doc.path.as_deref()),
             );
-            let dialog = container(
+            let dialog: Element<'_, Message> = container(
                 add_node_type_dialog(
                     type_ids,
                     selected_type.clone(),
@@ -1540,31 +1817,67 @@ impl App {
                 .map(Message::GraphChrome),
             )
             .width(Length::Fixed(320.0))
-            .style(styles::container_card(&self.resolved));
-
-            let backdrop: Element<'_, Message> = container(Space::new().width(Fill).height(Fill))
-                .width(Fill)
-                .height(Fill)
-                .style(|_theme| iced::widget::container::Style {
-                    background: Some(
-                        Color {
-                            a: 0.45,
-                            ..Color::BLACK
-                        }
-                        .into(),
-                    ),
-                    ..Default::default()
+            .style(styles::container_card(&self.resolved))
+            .into();
+            modal_overlay(shell, dialog)
+        } else if let Some(dialog_state) = &self.open_node_dialog {
+            let body_size = font_size(&self.resolved, &self.accessibility);
+            let filter_lower = dialog_state.filter.to_ascii_lowercase();
+            let entries: Vec<(String, String)> = self
+                .miro_index
+                .as_ref()
+                .map(|index| {
+                    index
+                        .iter()
+                        .filter(|(id, node_ref)| {
+                            if filter_lower.is_empty() {
+                                return true;
+                            }
+                            id.to_ascii_lowercase().contains(&filter_lower)
+                                || node_ref.kind.to_ascii_lowercase().contains(&filter_lower)
+                        })
+                        .map(|(id, node_ref)| (id.to_string(), node_ref.kind.clone()))
+                        .collect()
                 })
-                .into();
-
-            let overlay: Element<'_, Message> = container(dialog)
-                .width(Fill)
-                .height(Fill)
-                .align_x(Alignment::Center)
-                .align_y(Alignment::Center)
-                .into();
-
-            stack([shell, backdrop, overlay]).into()
+                .unwrap_or_default();
+            let mut list = column![].spacing(4);
+            for (id, kind) in &entries {
+                let selected = dialog_state.selected.as_deref() == Some(id.as_str());
+                let label = format!("{id}  ({kind})");
+                list = list.push(
+                    button(text(label).size(body_size))
+                        .on_press(Message::OpenNodeSelect(id.clone()))
+                        .padding(button_padding(&self.resolved))
+                        .style(styles::button_toggle(&self.resolved, selected))
+                        .width(Fill),
+                );
+            }
+            let dialog: Element<'_, Message> = container(
+                column![
+                    text("Open by NodeId").size(body_size),
+                    text_input("Filter…", &dialog_state.filter)
+                        .on_input(Message::OpenNodeFilter)
+                        .size(body_size),
+                    scrollable(list).height(Length::Fixed(240.0)),
+                    row![
+                        button(text("Cancel").size(body_size))
+                            .on_press(Message::OpenNodeCancel)
+                            .padding(button_padding(&self.resolved))
+                            .style(styles::button(&self.resolved)),
+                        button(text("Open").size(body_size))
+                            .on_press(Message::OpenNodeConfirm)
+                            .padding(button_padding(&self.resolved))
+                            .style(styles::button_toggle(&self.resolved, true)),
+                    ]
+                    .spacing(8)
+                ]
+                .spacing(10)
+                .padding(12),
+            )
+            .width(Length::Fixed(420.0))
+            .style(styles::container_card(&self.resolved))
+            .into();
+            modal_overlay(shell, dialog)
         } else {
             shell
         }
@@ -1964,6 +2277,57 @@ async fn pick_open_file_async() -> Option<PathBuf> {
         .pick_file()
         .await
         .map(|file| file.path().to_path_buf())
+}
+
+fn pick_workspace_folder() -> Task<Message> {
+    Task::perform(pick_workspace_folder_async(), |path| match path {
+        Some(path) => Message::OpenWorkspacePath(path),
+        None => Message::OpenCancelled,
+    })
+}
+
+async fn pick_workspace_folder_async() -> Option<PathBuf> {
+    rfd::AsyncFileDialog::new()
+        .pick_folder()
+        .await
+        .map(|folder| folder.path().to_path_buf())
+}
+
+fn roles_for_miro_kind(kind: &str) -> Vec<Option<String>> {
+    match kind {
+        "imp-graph" => vec![Some(ROLE_IMP_GRAPH.to_string())],
+        "notation" => vec![Some(ROLE_NOTATION.to_string())],
+        _ => Vec::new(),
+    }
+}
+
+fn modal_overlay<'a>(
+    shell: Element<'a, Message>,
+    dialog: Element<'a, Message>,
+) -> Element<'a, Message> {
+    let backdrop: Element<'_, Message> = container(Space::new().width(Fill).height(Fill))
+        .width(Fill)
+        .height(Fill)
+        .style(|_theme| iced::widget::container::Style {
+            background: Some(
+                Color {
+                    a: 0.45,
+                    ..Color::BLACK
+                }
+                .into(),
+            ),
+            ..Default::default()
+        })
+        .into();
+
+    let overlay: Element<'_, Message> = container(dialog)
+        .width(Fill)
+        .height(Fill)
+        .align_x(Alignment::Center)
+        .align_y(Alignment::Center)
+        .into();
+
+    stack([shell, backdrop, overlay]).into()
 }
 
 fn pick_save_file(document_id: DocumentId) -> Task<Message> {

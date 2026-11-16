@@ -27,7 +27,7 @@ Declarative requirements for configurable input→command bindings. Motivation: 
 ## Commands
 
 - Commands are identified by stable string ids and come from the extension **command** registry (see [`extensions.md`](extensions.md)).
-- Initial builtin document commands: `document.open` (open file dialog) and `document.close_active` (close the active tab, or no-op when none).
+- Initial builtin document commands: `document.open` (Miro NodeId open / Ctrl+O), `document.open-workspace`, `document.open-file` (filesystem escape hatch), and `document.close_active` (close the active tab, or no-op when none).
 - Builtin playback commands: `play.start`, `play.stop`, `play.toggle`.
 - Default binding: Space → `play.toggle` (no modifiers).
 - Unknown command ids in a bindings file are skipped when they are not present in the command registry, so files can outlive a given build or disabled components.

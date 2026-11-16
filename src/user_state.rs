@@ -238,16 +238,65 @@ impl UserStateStore {
     }
 }
 
+/// One restored open document (filesystem path or Miro NodeId).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum OpenDocumentRef {
+    /// Filesystem-origin tab.
+    Filesystem {
+        /// Absolute or user-supplied path.
+        path: PathBuf,
+    },
+    /// Miro-origin tab identified by product NodeId.
+    Miro {
+        /// Product NodeId used to pull / open.
+        #[serde(rename = "nodeId")]
+        node_id: String,
+    },
+}
+
 /// Open-document tab snapshot stored under the `documents` bucket.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct OpenDocumentsEntry {
-    /// Open document paths in tab order.
-    #[serde(default)]
+    /// Miro content root (workspace) when one is open.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub content_root: Option<PathBuf>,
+    /// Open documents in tab order (Miro + filesystem).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub open_documents: Vec<OpenDocumentRef>,
+    /// Active document when one is selected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active: Option<OpenDocumentRef>,
+    /// Legacy filesystem-only tab list (read for migration; prefer `open_documents`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub open_paths: Vec<PathBuf>,
-    /// Active document path when one is selected.
-    #[serde(default)]
+    /// Legacy active filesystem path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub active_path: Option<PathBuf>,
+}
+
+impl OpenDocumentsEntry {
+    /// Effective open list: `open_documents` when present, else legacy `open_paths`.
+    pub fn effective_open(&self) -> Vec<OpenDocumentRef> {
+        if !self.open_documents.is_empty() {
+            return self.open_documents.clone();
+        }
+        self.open_paths
+            .iter()
+            .cloned()
+            .map(|path| OpenDocumentRef::Filesystem { path })
+            .collect()
+    }
+
+    /// Effective active document, including legacy `active_path`.
+    pub fn effective_active(&self) -> Option<OpenDocumentRef> {
+        self.active.clone().or_else(|| {
+            self.active_path
+                .clone()
+                .map(|path| OpenDocumentRef::Filesystem { path })
+        })
+    }
 }
 
 /// Writes `data` via a temporary sibling file, then renames over `path`.
@@ -352,6 +401,7 @@ mod tests {
         let entry = OpenDocumentsEntry {
             open_paths: vec![PathBuf::from("/tmp/a.json")],
             active_path: Some(PathBuf::from("/tmp/a.json")),
+            ..Default::default()
         };
         let gen = store
             .set_entry("documents", "open-documents", &entry)
@@ -383,7 +433,7 @@ mod tests {
                 "open-documents",
                 &OpenDocumentsEntry {
                     open_paths: vec![PathBuf::from("/a")],
-                    active_path: None,
+                    ..Default::default()
                 },
             )
             .unwrap();
@@ -393,7 +443,7 @@ mod tests {
                 "open-documents",
                 &OpenDocumentsEntry {
                     open_paths: vec![PathBuf::from("/b")],
-                    active_path: None,
+                    ..Default::default()
                 },
             )
             .unwrap();

@@ -39,6 +39,8 @@ pub const EXT_AURA_NOTATION: &str = "aura-notation";
 
 /// Builtin command implementation / component ids.
 pub const CMD_DOCUMENT_OPEN: &str = "document.open";
+pub const CMD_DOCUMENT_OPEN_WORKSPACE: &str = "document.open-workspace";
+pub const CMD_DOCUMENT_OPEN_FILE: &str = "document.open-file";
 pub const CMD_DOCUMENT_CLOSE_ACTIVE: &str = "document.close_active";
 pub const CMD_DOCUMENT_NEW_GRAPH: &str = "document.new.graph";
 pub const CMD_PLAY_START: &str = "play.start";

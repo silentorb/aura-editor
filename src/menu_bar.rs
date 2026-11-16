@@ -14,7 +14,8 @@ use native_theme_iced::{
 
 use crate::{
     CommandId, Message, CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_NEW_GRAPH, CMD_DOCUMENT_NEW_NOTATION,
-    CMD_DOCUMENT_OPEN, CMD_DOCUMENT_SAVE, CMD_PLAY_START, CMD_PLAY_STOP,
+    CMD_DOCUMENT_OPEN, CMD_DOCUMENT_OPEN_FILE, CMD_DOCUMENT_OPEN_WORKSPACE, CMD_DOCUMENT_SAVE,
+    CMD_PLAY_START, CMD_PLAY_STOP,
 };
 
 fn menu_item<'a>(
@@ -56,7 +57,19 @@ pub fn global_menu_bar<'a>(
     let body = font_size(resolved, accessibility);
 
     let file_menu = Menu::new(menu_items!(
+        (menu_item(
+            "Open Workspace…",
+            CMD_DOCUMENT_OPEN_WORKSPACE,
+            resolved,
+            body
+        )),
         (menu_item("Open…", CMD_DOCUMENT_OPEN, resolved, body)),
+        (menu_item(
+            "Open File…",
+            CMD_DOCUMENT_OPEN_FILE,
+            resolved,
+            body
+        )),
         (menu_item(
             "New notation",
             CMD_DOCUMENT_NEW_NOTATION,

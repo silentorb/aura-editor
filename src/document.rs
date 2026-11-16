@@ -344,6 +344,16 @@ impl DocumentStore {
         })
     }
 
+    /// Finds an open Miro tab whose product open key is `node_id`.
+    pub fn find_miro_by_node_id(&self, node_id: &str) -> Option<DocumentId> {
+        self.origins.iter().find_map(|(id, origin)| match origin {
+            DocumentOrigin::Miro {
+                node_id: open_id, ..
+            } if open_id == node_id => Some(*id),
+            _ => None,
+        })
+    }
+
     /// Creates an untitled notation tab and activates it.
     pub fn create_untitled_notation(&mut self) -> DocumentId {
         let index = self.inner.take_untitled_index();

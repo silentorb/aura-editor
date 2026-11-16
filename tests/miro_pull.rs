@@ -1,9 +1,9 @@
-//! Miro pull → ModelGraph by NodeId (parallel workflow; not menu-attached).
+//! Miro pull → ModelGraph by NodeId (primary open + missing-card resolve).
 
 use std::fs;
 use std::path::PathBuf;
 
-use aura_editor::{App, Bindings, DocumentOrigin};
+use aura_editor::{App, Bindings, DocumentOrigin, GraphEdit, Message};
 use imp_core_types::Graph;
 
 const SINE_OSC_NODE: &str = "0033AFBGAY03CEW3Z5AP3J086B";
@@ -110,5 +110,64 @@ fn miro_reopen_dedupes_same_mir_blob() {
         .expect("reopen");
     assert_eq!(id1, id2);
     assert_eq!(app.documents().documents().len(), 1);
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn open_miro_node_id_message_opens_tab() {
+    let root = temp_content_root();
+    fs::copy(fixture("sine.json"), root.join("sine.json")).expect("copy");
+
+    let mut app = App::with_bindings(Bindings::empty());
+    app.open_miro_workspace_in_memory(&root).expect("session");
+    let _ = app.update(Message::OpenMiroNodeId(SINE_OSC_NODE.into()));
+    assert_eq!(app.documents().documents().len(), 1);
+    assert!(app
+        .documents()
+        .active_document()
+        .and_then(|doc| doc.payload.graph())
+        .is_some());
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn open_node_resolves_missing_card_into_local_map() {
+    let root = temp_content_root();
+    fs::copy(fixture("dangling-edge.json"), root.join("dangling.json")).expect("copy");
+    fs::copy(fixture("ghost-node.json"), root.join("ghost.json")).expect("copy");
+
+    let mut app = App::with_bindings(Bindings::empty());
+    app.open_miro_workspace_in_memory(&root).expect("session");
+    let id = app.open_miro_node_tab(DANGLING_OUT_NODE).expect("open dangling");
+    {
+        let graph = app
+            .documents()
+            .get(id)
+            .expect("doc")
+            .payload
+            .graph()
+            .expect("graph");
+        assert!(!graph.nodes.contains_key("ghost"));
+    }
+
+    let _ = app.update(Message::Graph {
+        document_id: id,
+        edit: GraphEdit::OpenNode {
+            node_id: "ghost".into(),
+        },
+    });
+
+    let graph = app
+        .documents()
+        .get(id)
+        .expect("doc")
+        .payload
+        .graph()
+        .expect("graph");
+    let ghost = graph.nodes.get("ghost").expect("resolved into local map");
+    assert_eq!(ghost.node_type, "time");
+    assert_eq!(ghost.title.as_deref(), Some("ghost clock"));
+    // Resolve also opens the tip that owns the node when a view maps.
+    assert!(app.documents().documents().len() >= 1);
     let _ = fs::remove_dir_all(&root);
 }

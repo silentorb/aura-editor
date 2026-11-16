@@ -22,6 +22,22 @@
       "params": {}
     },
     {
+      "id": "document.open-workspace",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "document.open-workspace",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "document.open-file",
+      "extensionId": "aura-builtin",
+      "kind": "command",
+      "implementationId": "document.open-file",
+      "enabled": true,
+      "params": {}
+    },
+    {
       "id": "document.close_active",
       "extensionId": "aura-builtin",
       "kind": "command",

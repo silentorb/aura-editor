@@ -1,12 +1,12 @@
 # Miro pull (editor host)
 
-Declarative requirements for the editor’s parallel Miro app-memory path. Product shell: [`product.md`](product.md). Engine host: Aura engine `docs/design/miro.md`. Graph missing nodes: [`graph-dag.md`](graph-dag.md).
+Declarative requirements for the editor’s Miro app-memory path. Product shell: [`product.md`](product.md). Engine host: Aura engine `docs/design/miro.md`. Graph missing nodes: [`graph-dag.md`](graph-dag.md). User state: [`user-state.md`](user-state.md).
 
 ## Role
 
 - Miro layers for Aura: **text files** (authoring SoT) → **SQLite projection** (Mir sync) → **app memory** (`ModelGraph` tabs) via host **pull**.
-- The editor **must** provide a durable programmatic workflow: open a `MiroSession` for a content root, resolve a product **NodeId** through the Aura host index, pull the Mir blob, and materialize it through the stacked document-type pipeline into a session tab.
-- File → **Open…** **must** remain the filesystem open path. Miro open is **not** menu-attached in this slice (intentional gap; later UI / node-ref navigation calls the same API).
+- The editor **must** provide a durable workflow: open a `MiroSession` for a content root (workspace), resolve a product **NodeId** through the Aura host index, pull the Mir blob, and materialize it through the stacked document-type pipeline into a session tab.
+- Product open **must** be Miro-first: **Open Workspace…** then **Open…** (NodeId picker / Ctrl+O). **Open File…** remains a secondary filesystem escape hatch.
 
 ## Identity
 
@@ -23,12 +23,12 @@ Declarative requirements for the editor’s parallel Miro app-memory path. Produ
 ## Pull semantics
 
 - Pull is host index resolve → `poll_watch` → `pull_record(mir_record_id)` → `open_document_bytes` → `ModelGraph` (same stack as filesystem bytes).
-- Imp graphs keep edge topology when endpoints lack a local `Graph.nodes` entry; missing cards / typecheck errors behave as for any incomplete graph ([`graph-dag.md`](graph-dag.md)). Resolving those ids by a further Miro pull is later host policy.
+- Imp graphs keep edge topology when endpoints lack a local `Graph.nodes` entry; missing cards / typecheck errors behave as for any incomplete graph ([`graph-dag.md`](graph-dag.md)).
+- Double-click **OpenNode** on a missing card **must** resolve that NodeId via Miro into the **active** tab’s local map (copy from an `imp-graph` tip, or a nullary `external_score` proxy for a notation tip). When a document view maps for the tip kind, the host **may** also open/focus the Miro tab.
 
 ## Non-goals (this slice)
 
-- File-menu Miro workspace / record pickers
-- Mir record list/query browser
-- Restoring Miro-origin tabs via pull on startup (filesystem `openPaths` only)
+- Full Mir record list/query browser beyond the host NodeId index picker
 - Dirty-tab conflict UI when the projection changes
 - Replacing demos / engine `load_graph` with Miro-only open
+- Path-under-root as a product open key
