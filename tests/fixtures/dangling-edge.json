@@ -1,0 +1,23 @@
+{
+  "type": "imp-graph",
+  "nodes": {
+    "OUTNODEID00000000000000001": {
+      "id": "OUTNODEID00000000000000001",
+      "type": "output",
+      "inputs": {},
+      "title": "out"
+    }
+  },
+  "edges": {
+    "ghost_to_out": {
+      "from": {
+        "node": "ghost",
+        "port": "value"
+      },
+      "to": {
+        "node": "OUTNODEID00000000000000001",
+        "port": "value"
+      }
+    }
+  }
+}

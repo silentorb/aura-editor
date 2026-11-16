@@ -51,6 +51,29 @@ fn open_sine_erase_node_marks_dirty() {
 }
 
 #[test]
+fn erase_missing_node_strips_dangling_edges() {
+    let mut app = test_app();
+    let _ = app.update(Message::OpenPath(fixture("dangling-edge.json")));
+    let id = app.documents().active_id().unwrap();
+    let graph = app.documents().active_document().unwrap().payload.graph().unwrap();
+    assert!(graph.edges.contains_key("ghost_to_out"));
+    assert!(!graph.nodes.contains_key("ghost"));
+
+    let _ = app.update(Message::Graph {
+        document_id: id,
+        edit: GraphEdit::EraseNode {
+            node_id: "ghost".into(),
+        },
+    });
+
+    let doc = app.documents().active_document().unwrap();
+    assert!(doc.dirty);
+    let graph = doc.payload.graph().unwrap();
+    assert!(graph.edges.is_empty());
+    assert_eq!(graph.nodes.len(), 1);
+}
+
+#[test]
 fn add_node_command_opens_dialog_and_confirm_inserts() {
     let mut app = test_app();
     let _ = app.update(Message::Command(CommandId::new(CMD_DOCUMENT_NEW_GRAPH)));

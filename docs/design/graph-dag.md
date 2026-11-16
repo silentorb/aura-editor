@@ -25,7 +25,7 @@ Graph editing does **not** use mutually exclusive modal tools (unlike the piano-
 | Add node | Command `graph.add.node` (toolbar **Add node** button; key `A` when a graph tab is active) opens a modal to choose a node type. Submit inserts a node of that type with a new ULID id, a unique title derived from the type (`sine`, `sine_2`, …), and regenerates layout; Cancel/Escape closes with no edit. Last-used type is remembered in user state. |
 | Connect | Always-on drag-to-connect per connection mode (below), with a rubber-band preview while dragging. Not a toolbar tool. |
 | Disconnect port | In **Precise** mode, **right-click** a port handle to remove every edge attached to that port. |
-| Delete | **Delete** / **Backspace** removes the current selection (node or edge). There is no Erase tool or click-to-erase. |
+| Delete | **Delete** / **Backspace** removes the current selection (node or edge). Deleting a present node also removes its incident edges. Deleting a **missing** node card (edge endpoint with no local `Graph.nodes` entry) strips those incident edges only. There is no Erase tool or click-to-erase. |
 
 ## Connection modes
 
@@ -56,6 +56,12 @@ Graph editing does **not** use mutually exclusive modal tools (unlike the piano-
 
 - **Add node** runs `graph.add.node` (opens the type modal).
 - **Graph view options ▾** (far right) holds global view prefs. First control: **Precise ports** checkbox toggle. More options may join later without relocating the control.
+
+## Missing local nodes
+
+- Edges are the graph topology; `Graph.nodes` is the local instance map. An edge may reference a node id with no local entry.
+- The canvas lays out the union of local node ids and edge endpoint ids. Endpoints absent from `Graph.nodes` appear as **missing** cards filled with the theme danger (red) color instead of the normal/primary fills, with a `(missing)` type label.
+- Missing cards are still selectable so Delete can clear the dangling wires. Resolution beyond the local map is future work (decentralized graphs).
 
 ## Selection and update
 

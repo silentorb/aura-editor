@@ -32,11 +32,12 @@ pub use aura_graph_json::graph_to_aura_json;
 pub use graph_file::OpenError;
 pub use imp_graph_editor::{
     add_edge, add_node, add_node_type_dialog, auto_pair_ports, center_translation, clamp_scale,
-    graph_canvas, layout_graph, node_properties_editor, pan_by, precise_ports_checkbox, remove_edge,
-    remove_edges_at_port, remove_edges_between, remove_node, reorder_variadic_inputs, set_node_title,
-    set_node_type, unique_node_title, zoom_at_point, CatalogPort, ConnectDraft, ConnectionMode,
-    GraphChromeMessage, GraphEdit, GraphEditError, GraphLayout, GraphUiEntry, GraphUiState,
-    GraphView, LaidOutNode, NodePortInfo, NodeTypeCatalog, PortCatalog,
+    erase_node_or_dangling, graph_canvas, layout_graph, node_properties_editor, pan_by,
+    precise_ports_checkbox, remove_edge, remove_edges_at_port, remove_edges_between, remove_node,
+    reorder_variadic_inputs, set_node_title, set_node_type, unique_node_title, zoom_at_point,
+    CatalogPort, ConnectDraft, ConnectionMode, GraphChromeMessage, GraphEdit, GraphEditError,
+    GraphLayout, GraphUiEntry, GraphUiState, GraphView, LaidOutNode, NodePortInfo, NodeTypeCatalog,
+    PortCatalog,
 };
 pub use logging::init_logging;
 pub use piano_roll_ui::{PianoRollUiEntry, PianoRollUiState};
@@ -1067,7 +1068,7 @@ impl App {
                 let Some(graph) = doc.payload.graph_mut() else {
                     return Task::none();
                 };
-                if let Err(error) = remove_node(graph, &node_id) {
+                if let Err(error) = erase_node_or_dangling(graph, &node_id) {
                     self.status_notice = Some(error.to_string());
                 } else {
                     doc.dirty = true;
