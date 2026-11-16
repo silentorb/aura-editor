@@ -6,12 +6,15 @@
 
 use std::path::{Path, PathBuf};
 
+use std::collections::BTreeSet;
+
 use aura_integration::{
     authoring_path_for_mir_record, build_miro_node_index, open_aura_miro_session_for_root,
-    open_aura_miro_session_in_memory, pull_by_node_id, AuraMiroError, MiroNodeIndex, MiroNodeRef,
-    MiroSession,
+    open_aura_miro_session_in_memory, pull_by_node_id, AuraMiroError, EXTERNAL_SCORE_NODE_TYPE,
+    MiroNodeIndex, MiroNodeRef, MiroSession,
 };
 use aura_interfaces::DocumentOpenError;
+use imp_core_types::{Graph, Node};
 use thiserror::Error;
 
 use crate::extensions::{ExtensionRuntime, StackedOpen};
@@ -102,6 +105,49 @@ pub fn open_miro_node(
 /// Convenience: content root currently bound to `session`.
 pub fn session_content_root(session: &MiroSession) -> &Path {
     session.content_root()
+}
+
+/// Insert nullary `external_score` proxies for edge-referenced notation tip NodeIds.
+///
+/// Scans `content_root` with the host Miro index (no session required). Endpoints that
+/// already exist in `graph.nodes`, or that index as non-`notation` tips, are left alone
+/// so red missing cards still apply to true unknowns. Does not mark documents dirty —
+/// callers use this at open time to match headless translate hydration.
+pub fn hydrate_notation_tip_refs(
+    graph: &mut Graph,
+    content_root: impl AsRef<Path>,
+) -> Result<usize, AuraMiroError> {
+    let index = build_miro_node_index(content_root)?;
+    let mut candidates = BTreeSet::new();
+    for edge in graph.edges.values() {
+        candidates.insert(edge.from.node.clone());
+        candidates.insert(edge.to.node.clone());
+    }
+
+    let mut inserted = 0;
+    for node_id in candidates {
+        if graph.nodes.contains_key(&node_id) {
+            continue;
+        }
+        let Some(node_ref) = index.get(&node_id) else {
+            continue;
+        };
+        if node_ref.kind != "notation" {
+            continue;
+        }
+        graph.nodes.insert(
+            node_id.clone(),
+            Node {
+                id: node_id,
+                title: None,
+                node_type: EXTERNAL_SCORE_NODE_TYPE.to_string(),
+                type_args: Vec::new(),
+                inputs: Default::default(),
+            },
+        );
+        inserted += 1;
+    }
+    Ok(inserted)
 }
 
 #[cfg(test)]

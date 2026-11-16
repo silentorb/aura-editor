@@ -26,8 +26,8 @@ pub use document::{
     ModelGraph, SessionDocument, NOTATION_SCORE_NODE_ID, NOTATION_SCORE_NODE_TYPE,
 };
 pub use miro::{
-    miro_node_index, open_miro_node, open_miro_session, open_miro_session_in_memory,
-    session_content_root, MiroNodeOpen, MiroOpenError,
+    hydrate_notation_tip_refs, miro_node_index, open_miro_node, open_miro_session,
+    open_miro_session_in_memory, session_content_root, MiroNodeOpen, MiroOpenError,
 };
 pub use aura_integration::authoring_path_for_mir_record;
 pub use extensions::{

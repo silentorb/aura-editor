@@ -16,6 +16,18 @@ use imp_core_types::{Graph, Node, NodeId};
 use serde_json::Value;
 
 use crate::extensions::StackedOpen;
+use crate::miro::hydrate_notation_tip_refs;
+
+/// Hydrate notation tip edge refs into the local map when opening an Imp graph tip.
+fn hydrate_opened_graph(payload: &mut DocumentPayload, content_root: &Path) {
+    let Some(model) = payload.model_mut() else {
+        return;
+    };
+    if model.is_notation_document() {
+        return;
+    }
+    let _ = hydrate_notation_tip_refs(&mut model.graph, content_root);
+}
 
 /// Legacy placeholder NodeId for untitled / pre-tip-id notation documents.
 ///
@@ -285,7 +297,10 @@ impl DocumentStore {
         }
 
         let tip_type = opened.type_chain.last()?.as_str();
-        let payload = DocumentPayload::from_tip(tip_type, opened.payload)?;
+        let mut payload = DocumentPayload::from_tip(tip_type, opened.payload)?;
+        if let Some(parent) = path.parent() {
+            hydrate_opened_graph(&mut payload, parent);
+        }
         let id = self.inner.open_or_activate(
             path.clone(),
             opened.type_chain,
@@ -314,7 +329,8 @@ impl DocumentStore {
         }
 
         let tip_type = opened.type_chain.last()?.as_str();
-        let payload = DocumentPayload::from_tip(tip_type, opened.payload)?;
+        let mut payload = DocumentPayload::from_tip(tip_type, opened.payload)?;
+        hydrate_opened_graph(&mut payload, &content_root);
         let authoring = authoring_path_for_mir_record(&content_root, &mir_record_id);
         let id = self.inner.open_or_activate(
             authoring,

@@ -61,7 +61,7 @@ Graph editing does **not** use mutually exclusive modal tools (unlike the piano-
 
 - Edges are the graph topology; `Graph.nodes` is the local instance map. An edge may reference a node id with no local entry.
 - The canvas lays out the union of local node ids and edge endpoint ids. Endpoints absent from `Graph.nodes` appear as **missing** cards filled with the theme danger (red) color instead of the normal/primary fills, with a `(missing)` type label.
-- Missing cards are still selectable so Delete can clear the dangling wires.
+- On open, notation tip NodeIds that the content-root Miro index can resolve are hydrated into nullary `external_score` cards (not red). Remaining missing cards are still selectable so Delete can clear the dangling wires.
 - Double-click emits `OpenNode`. With a Miro workspace open, the host resolves the NodeId into the active local map via Miro pull (and may open a mapped document tab). See [`miro.md`](miro.md).
 
 ## Selection and update

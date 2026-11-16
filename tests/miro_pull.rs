@@ -131,6 +131,63 @@ fn open_miro_node_id_message_opens_tab() {
 }
 
 #[test]
+fn open_hydrates_notation_tip_edge_into_external_score() {
+    let root = temp_content_root();
+    fs::copy(fixture("notation.json"), root.join("arp.json")).expect("copy notation");
+    let graph_json = format!(
+        r#"{{
+          "type": "imp-graph",
+          "nodes": {{
+            "loop1": {{ "id": "loop1", "type": "loop", "inputs": {{}}, "title": "loop" }}
+          }},
+          "edges": {{
+            "arp_to_loop": {{
+              "from": {{ "node": "{NOTATION_TIP_ID}", "port": "score" }},
+              "to": {{ "node": "loop1", "port": "value" }}
+            }}
+          }}
+        }}"#
+    );
+    fs::write(root.join("parent.json"), graph_json).expect("write graph");
+
+    let runtime = aura_editor::ExtensionRuntime::load_bundled();
+    let opened = runtime
+        .open_document(root.join("parent.json"))
+        .expect("open");
+    let mut store = aura_editor::DocumentStore::new();
+    let id = store
+        .open_or_activate_stacked(root.join("parent.json"), opened)
+        .expect("activate");
+    let graph = store.get(id).expect("doc").payload.graph().expect("graph");
+    let tip = graph
+        .nodes
+        .get(NOTATION_TIP_ID)
+        .expect("notation tip hydrated");
+    assert_eq!(tip.node_type, "external_score");
+    assert!(!store.get(id).expect("doc").dirty);
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn open_does_not_hydrate_unindexed_imp_graph_endpoints() {
+    let root = temp_content_root();
+    fs::copy(fixture("dangling-edge.json"), root.join("dangling.json")).expect("copy");
+    // ghost tip is not present under root — stays missing (red).
+
+    let runtime = aura_editor::ExtensionRuntime::load_bundled();
+    let opened = runtime
+        .open_document(root.join("dangling.json"))
+        .expect("open");
+    let mut store = aura_editor::DocumentStore::new();
+    let id = store
+        .open_or_activate_stacked(root.join("dangling.json"), opened)
+        .expect("activate");
+    let graph = store.get(id).expect("doc").payload.graph().expect("graph");
+    assert!(!graph.nodes.contains_key("ghost"));
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
 fn open_node_resolves_missing_card_into_local_map() {
     let root = temp_content_root();
     fs::copy(fixture("dangling-edge.json"), root.join("dangling.json")).expect("copy");
