@@ -59,7 +59,7 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Play menu exposes transport commands (Start, Stop). Toggle playback is available as a command (default Space) and need not appear in the menu.
 - Below the menu, the shell body is two named panes in an Iced `pane_grid`: **documents** and **properties**. Panes have title bars for drag rearrange; they are not closable or hideable in this slice. Split ratios are user-resizable.
 - The **documents** pane hosts the tab bar, the active view’s tool strip (graph or piano-roll when applicable, otherwise empty), and the document content. Menus in this slice are not contextual to the active view.
-- The **properties** pane shows graph node Id/Type editors when a graph node is selected; otherwise an empty-state message. Full input-literal inspection remains out of scope (see [`graph-dag.md`](graph-dag.md)).
+- The **properties** pane shows a graph node Id editor (auto-commit after idle / Enter) and a read-only Type label when a graph node is selected; otherwise an empty-state message. Full input-literal inspection and in-pane type changes remain out of scope (see [`graph-dag.md`](graph-dag.md)).
 - A fixed **status bar** below the pane grid shows the global status line (errors, graph-edit notices, playback state). It is not a rearrangeable pane and is not part of the persisted shell-layout tree.
 - A global application toolbar, further tool panes, floating windows, closable docks, and per-view contextual menus are deferred.
 
@@ -108,7 +108,8 @@ Repos and projects use kebab-case. Rust packages use snake_case (`aura_editor`).
 - Freeform manual node placement on a canvas (layout stays automatic)
 - Persisting pan/zoom camera per document across launches
 - Opening GraphLibrary catalogs as editor documents until that flow is designed
-- Full input-literal property inspector for graph nodes (Properties pane: rename + change type only in this slice)
+- Full input-literal property inspector for graph nodes (Properties pane: id rename + read-only type only in this slice; changing type is deferred)
+- Primary/streamlined UI for changing an existing node's type (secondary flow later; mutation helpers may remain for hosts)
 - Continuous scrub of the playhead while audio is running (park + start only)
 - Explicit playback-node override / pinned target (Select playback node deferred; fringe cases TBD)
 - Fully abstracting persistence from Aura operation (paths remain optional library-discovery hints)

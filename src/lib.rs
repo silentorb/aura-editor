@@ -92,6 +92,9 @@ use crate::playback::{
     secs_to_beats,
 };
 
+/// Idle pause before committing Properties id edits into the graph.
+pub const RENAME_DEBOUNCE: Duration = Duration::from_millis(500);
+
 /// Root application state for the editor shell.
 #[derive(Debug)]
 pub struct App {
@@ -112,6 +115,8 @@ pub struct App {
     graph_ui: GraphUiState,
     /// Open Add-node dialog type selection (session-only).
     add_node_dialog: Option<String>,
+    /// Generation token for debounced Properties rename commits.
+    rename_commit_generation: u64,
     /// Parked playhead beats keyed by open notation document.
     playheads: HashMap<DocumentId, f64>,
     /// CPAL stream owner for the active playback graph.
@@ -176,6 +181,11 @@ pub enum Message {
     /// Debounced flush of dirty user-state buckets.
     FlushUserState {
         /// Generation token from the mutating update that scheduled this flush.
+        generation: u64,
+    },
+    /// Debounced commit of the Properties rename buffer.
+    CommitGraphRename {
+        /// Generation token from the `RenameInput` that scheduled this commit.
         generation: u64,
     },
     /// Piano-roll edit from the canvas.
@@ -257,6 +267,7 @@ impl App {
             piano_roll_ui: PianoRollUiState::default(),
             graph_ui: GraphUiState::new("sine"),
             add_node_dialog: None,
+            rename_commit_generation: 0,
             playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
             playback_end_secs: None,
@@ -289,6 +300,7 @@ impl App {
             piano_roll_ui,
             graph_ui,
             add_node_dialog: None,
+            rename_commit_generation: 0,
             playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
             playback_end_secs: None,
@@ -597,6 +609,12 @@ impl App {
                     warn!(%error, "failed to flush user state");
                 }
             }
+            Message::CommitGraphRename { generation } => {
+                if generation != self.rename_commit_generation {
+                    return Task::none();
+                }
+                return self.commit_graph_rename();
+            }
             Message::PianoRoll(edit) => {
                 return self.apply_piano_roll_edit(edit);
             }
@@ -867,8 +885,10 @@ impl App {
             }
             GraphChromeMessage::RenameInput(value) => {
                 self.graph_ui.rename_buffer = value;
+                return self.schedule_rename_commit();
             }
             GraphChromeMessage::RenameCommit => {
+                self.invalidate_pending_rename_commit();
                 return self.commit_graph_rename();
             }
             GraphChromeMessage::SelectedTypeChanged(node_type) => {
@@ -900,12 +920,14 @@ impl App {
                 if self.documents.active_id() != Some(document_id) {
                     return Task::none();
                 }
+                self.invalidate_pending_rename_commit();
                 self.graph_ui.select_node(node_id);
             }
             GraphEdit::SelectEdge { edge_id } => {
                 if self.documents.active_id() != Some(document_id) {
                     return Task::none();
                 }
+                self.invalidate_pending_rename_commit();
                 self.graph_ui.select_edge(edge_id);
             }
             GraphEdit::AddNode => {
@@ -923,6 +945,7 @@ impl App {
                 }
                 doc.dirty = true;
                 self.status_notice = None;
+                self.invalidate_pending_rename_commit();
                 self.graph_ui.select_node(Some(id));
             }
             GraphEdit::BeginConnect {
@@ -1113,6 +1136,21 @@ impl App {
         Task::none()
     }
 
+    fn invalidate_pending_rename_commit(&mut self) {
+        self.rename_commit_generation = self.rename_commit_generation.wrapping_add(1);
+    }
+
+    fn schedule_rename_commit(&mut self) -> Task<Message> {
+        self.invalidate_pending_rename_commit();
+        let generation = self.rename_commit_generation;
+        Task::perform(
+            async move {
+                tokio::time::sleep(RENAME_DEBOUNCE).await;
+            },
+            move |_| Message::CommitGraphRename { generation },
+        )
+    }
+
     fn commit_graph_rename(&mut self) -> Task<Message> {
         let Some(old_id) = self.graph_ui.selected_node.clone() else {
             return Task::none();
@@ -1126,7 +1164,10 @@ impl App {
         };
         match rename_node(graph, &old_id, new_id.clone()) {
             Ok(id) => {
-                doc.dirty = true;
+                // Same-id no-op from rename_node still returns Ok; only mark dirty on change.
+                if id != old_id {
+                    doc.dirty = true;
+                }
                 self.status_notice = None;
                 self.graph_ui.select_node(Some(id));
             }
@@ -1475,24 +1516,19 @@ impl App {
             .into();
         };
 
-        let type_ids = available_node_types(
-            self.documents
-                .active_document()
-                .and_then(|doc| doc.path.as_deref()),
-        );
-        let selected_type = self
+        let node_type = self
             .documents
             .active_document()
             .and_then(|doc| doc.payload.graph())
             .and_then(|graph| graph.nodes.get(node_id))
-            .map(|node| node.node_type.clone());
+            .map(|node| node.node_type.as_str())
+            .unwrap_or("");
 
         container(
             column![node_properties_editor(
                 node_id,
                 &self.graph_ui.rename_buffer,
-                type_ids,
-                selected_type,
+                node_type,
                 &self.resolved,
                 &self.accessibility,
             )

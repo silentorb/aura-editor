@@ -86,8 +86,15 @@ fn properties_pane_shows_node_editors_when_selected() {
     let mut ui = simulator(app.view());
     assert!(ui.find("Node: freq").is_ok());
     assert!(ui.find("Id:").is_ok(), "Properties should show Id label");
-    assert!(ui.find("Rename").is_ok(), "Properties should show Rename");
+    assert!(
+        ui.find("Rename").is_err(),
+        "Properties must not show a Rename button"
+    );
     assert!(ui.find("Type:").is_ok(), "Properties should show Type label");
+    assert!(
+        ui.find("parameter").is_ok(),
+        "Properties should show the selected node type as text"
+    );
 }
 
 #[test]

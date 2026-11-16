@@ -153,6 +153,75 @@ fn graph_ui_entry_defaults() {
 }
 
 #[test]
+fn rename_input_does_not_commit_until_matching_generation() {
+    let mut app = test_app();
+    let _ = app.update(Message::OpenPath(fixture("sine.json")));
+    let id = app.documents().active_id().unwrap();
+
+    let _ = app.update(Message::Graph {
+        document_id: id,
+        edit: GraphEdit::SelectNode {
+            node_id: Some(String::from("freq")),
+        },
+    });
+    let _ = app.update(Message::GraphChrome(GraphChromeMessage::RenameInput(
+        String::from("freq2"),
+    )));
+
+    let doc = app.documents().active_document().unwrap();
+    assert!(!doc.dirty);
+    assert!(doc.payload.graph().unwrap().nodes.contains_key("freq"));
+    assert!(!doc.payload.graph().unwrap().nodes.contains_key("freq2"));
+
+    // SelectNode bumps generation to 1; RenameInput bumps to 2.
+    let _ = app.update(Message::CommitGraphRename { generation: 1 });
+    let doc = app.documents().active_document().unwrap();
+    assert!(!doc.dirty);
+    assert!(doc.payload.graph().unwrap().nodes.contains_key("freq"));
+
+    let _ = app.update(Message::CommitGraphRename { generation: 2 });
+    let doc = app.documents().active_document().unwrap();
+    assert!(doc.dirty);
+    assert!(!doc.payload.graph().unwrap().nodes.contains_key("freq"));
+    assert!(doc.payload.graph().unwrap().nodes.contains_key("freq2"));
+    assert_eq!(app.graph_ui().selected_node.as_deref(), Some("freq2"));
+}
+
+#[test]
+fn rename_commit_applies_immediately_and_invalidates_pending() {
+    let mut app = test_app();
+    let _ = app.update(Message::OpenPath(fixture("sine.json")));
+    let id = app.documents().active_id().unwrap();
+
+    let _ = app.update(Message::Graph {
+        document_id: id,
+        edit: GraphEdit::SelectNode {
+            node_id: Some(String::from("freq")),
+        },
+    });
+    let _ = app.update(Message::GraphChrome(GraphChromeMessage::RenameInput(
+        String::from("freq2"),
+    )));
+    let _ = app.update(Message::GraphChrome(GraphChromeMessage::RenameCommit));
+
+    let doc = app.documents().active_document().unwrap();
+    assert!(doc.dirty);
+    assert!(doc.payload.graph().unwrap().nodes.contains_key("freq2"));
+
+    // Stale debounce from RenameInput (generation 2) must not re-apply after Enter.
+    let _ = app.update(Message::CommitGraphRename { generation: 2 });
+    assert!(app
+        .documents()
+        .active_document()
+        .unwrap()
+        .payload
+        .graph()
+        .unwrap()
+        .nodes
+        .contains_key("freq2"));
+}
+
+#[test]
 fn new_graph_save_round_trip() {
     let dir = std::env::temp_dir().join(format!(
         "aura-editor-graph-edit-{}",
