@@ -5,9 +5,9 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 ## Role
 
 - Users can create and edit discrete note events on a time × pitch grid — a classic MIDI piano roll — without making destructive timeline editing the product’s center.
-- Notation is a **complement** to procedural Imp graphs: one plain-text Aura JSON file per notation document, composed later with other files like a programming project (including Imp graphs that reference notation files via engine `notation_score`).
+- Notation is a **complement** to procedural Imp graphs: one plain-text Aura JSON file per notation document, composed later with other files like a programming project (including Imp graphs that wire notation tips by tip NodeId through Miro / `external_score`).
 - In the editor session, a notation tip is a **nullary node** (`external_score`) with Aura-embedded notation data — a complex primitive that outputs a static `score`. The piano roll edits that embedded payload; on-disk `type: "notation"` files are unchanged and are only projected at open/save.
-- Embedded notation is the same musical material procedural generators produce: an engine `Score` / `ScoreSignal`. Play from a piano-roll tab injects that score into the Imp voice path (`external_score` → `poly_sine_score` → output), sharing the Score ontology with `arpeggio` / `bass_line` / `drum_grid` / path-referenced `notation_score`.
+- Embedded notation is the same musical material procedural generators produce: an engine `Score` / `ScoreSignal`. Play from a piano-roll tab injects that score into the Imp voice path (`external_score` → `poly_sine_score` → output), sharing the Score ontology with `arpeggio` / `bass_line` / `drum_grid` / tip-NodeId `external_score` refs.
 
 ## Document type
 
@@ -18,6 +18,7 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 ```json
 {
   "type": "notation",
+  "id": "01JNOTATIONTIP000000000001",
   "version": 1,
   "tempoBpm": 120,
   "timeSignature": { "beatsPerBar": 4, "beatUnit": 4 },
@@ -28,7 +29,7 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 ```
 
 - Pitch uses scientific notation labels with middle C = `C4` = semitone `60` (A4 = 69), matching Aura engine `Semitone` encoding.
-- Event fields align with engine `NoteEvent` / `Score`. The editor keeps its own `aura_ext_notation` serde model for the piano roll; the engine independently loads the same on-disk schema for Imp `notation_score` nodes. Schemas must stay compatible.
+- Event fields align with engine `NoteEvent` / `Score`. The editor keeps its own `aura_ext_notation` serde model for the piano roll; the engine loads the same on-disk schema when binding tip NodeIds to `external_score`. Schemas must stay compatible. Tip-level `id` is required for Miro host indexing.
 - Per-note `params` are omitted in v1; `velocity` defaults to `1.0` when absent.
 
 ## Create, open, and save

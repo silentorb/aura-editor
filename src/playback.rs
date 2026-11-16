@@ -81,7 +81,7 @@ pub fn playback_registry(neighbor_hint: Option<&Path>) -> Result<Registry, Playb
 ///
 /// Round-trips JSON so the editor's Imp mount and the engine's Imp mount need
 /// not share a single `imp_core_types` package identity. `neighbor_hint` is used
-/// for sibling library discovery and as the graph directory for `notation_score` paths.
+/// for sibling library discovery and as the content root for tip NodeId score resolve.
 pub fn prepare_session_playback(
     graph: &Graph,
     neighbor_hint: Option<&Path>,
