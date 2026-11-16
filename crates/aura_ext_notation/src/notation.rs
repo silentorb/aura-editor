@@ -11,6 +11,11 @@ pub struct Notation {
     /// Aura JSON document-type id; must be `notation`.
     #[serde(rename = "type")]
     pub type_id: String,
+    /// Stable tip NodeId for Miro host indexing and in-memory score identity.
+    ///
+    /// Optional for legacy / untitled documents; Miro-indexed tips **must** set this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
     /// Schema version (currently 1).
     pub version: u32,
     /// Tempo in beats per minute.
@@ -32,11 +37,17 @@ impl Notation {
     pub fn empty() -> Self {
         Self {
             type_id: aura_interfaces::DOC_TYPE_NOTATION.to_string(),
+            id: None,
             version: 1,
             tempo_bpm: 120.0,
             time_signature: NotationTimeSignature::FOUR_FOUR,
             events: Vec::new(),
         }
+    }
+
+    /// Tip NodeId when present; otherwise the legacy placeholder `"score"`.
+    pub fn tip_node_id(&self) -> &str {
+        self.id.as_deref().unwrap_or("score")
     }
 
     /// Serializes this document as pretty Aura JSON.

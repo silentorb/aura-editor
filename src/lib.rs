@@ -22,14 +22,14 @@ mod user_state;
 pub use bindings::{user_bindings_path, Bindings, DEFAULT_BINDINGS_JSON};
 pub use command::CommandId;
 pub use document::{
-    authoring_path_for_record, DocumentId, DocumentOrigin, DocumentPayload, DocumentStore,
-    EmbeddedPayload, GraphDocument, ModelGraph, SessionDocument, NOTATION_SCORE_NODE_ID,
-    NOTATION_SCORE_NODE_TYPE,
+    DocumentId, DocumentOrigin, DocumentPayload, DocumentStore, EmbeddedPayload, GraphDocument,
+    ModelGraph, SessionDocument, NOTATION_SCORE_NODE_ID, NOTATION_SCORE_NODE_TYPE,
 };
 pub use miro::{
-    open_miro_record, open_miro_session, open_miro_session_in_memory, session_content_root,
-    MiroOpenError,
+    miro_node_index, open_miro_node, open_miro_session, open_miro_session_in_memory,
+    session_content_root, MiroNodeOpen, MiroOpenError,
 };
+pub use aura_integration::authoring_path_for_mir_record;
 pub use extensions::{
     register_linked_extensions, ExtensionRuntime, RegistrationHost, StackedOpen, UserStateBinding,
     DEFAULT_EXTENSIONS_JSON,
@@ -373,24 +373,40 @@ impl App {
         Ok(())
     }
 
-    /// Pulls `record_id` from the active Miro session into a document tab.
+    /// Pulls the Mir blob for `node_id` from the active Miro session into a tab.
     ///
-    /// Dedupes on Miro origin. Returns the active document id.
-    pub fn open_miro_record_tab(&mut self, record_id: &str) -> Result<DocumentId, MiroOpenError> {
-        let Some(session) = self.miro.as_mut() else {
+    /// Resolves through the host NodeId index; dedupes on Mir blob. Returns the
+    /// active document id.
+    pub fn open_miro_node_tab(&mut self, node_id: &str) -> Result<DocumentId, MiroOpenError> {
+        if self.miro.is_none() {
             return Err(MiroOpenError::Document(OpenError::Invalid {
                 path: PathBuf::from("miro"),
                 reason: String::from("no Miro session open"),
             }));
+        }
+        let content_root = self
+            .miro
+            .as_ref()
+            .expect("checked")
+            .content_root()
+            .to_path_buf();
+        let index = miro_node_index(&content_root)?;
+        let pulled = {
+            let session = self.miro.as_mut().expect("checked");
+            open_miro_node(&self.extensions, session, &index, node_id)?
         };
-        let content_root = session.content_root().to_path_buf();
-        let opened = open_miro_record(&self.extensions, session, record_id)?;
+        let mir_record_id = pulled.node_ref.mir_record_id.clone();
         let id = self
             .documents
-            .open_or_activate_miro(content_root, record_id.to_string(), opened)
+            .open_or_activate_miro(
+                content_root,
+                pulled.node_id,
+                mir_record_id,
+                pulled.opened,
+            )
             .ok_or_else(|| {
                 MiroOpenError::Document(OpenError::Invalid {
-                    path: PathBuf::from(record_id),
+                    path: PathBuf::from(node_id),
                     reason: String::from("unsupported tip document payload"),
                 })
             })?;

@@ -5,18 +5,24 @@ Declarative requirements for the editor’s parallel Miro app-memory path. Produ
 ## Role
 
 - Miro layers for Aura: **text files** (authoring SoT) → **SQLite projection** (Mir sync) → **app memory** (`ModelGraph` tabs) via host **pull**.
-- The editor **must** provide a durable programmatic workflow: open a `MiroSession` for a content root, pull a record by opaque id, and materialize it through the stacked document-type pipeline into a session tab.
+- The editor **must** provide a durable programmatic workflow: open a `MiroSession` for a content root, resolve a product **NodeId** through the Aura host index, pull the Mir blob, and materialize it through the stacked document-type pipeline into a session tab.
 - File → **Open…** **must** remain the filesystem open path. Miro open is **not** menu-attached in this slice (intentional gap; later UI / node-ref navigation calls the same API).
+
+## Identity
+
+- Product Miro open / resolve keys are Imp **NodeId**s (`open_miro_node` / `open_miro_node_tab`).
+- Aura maintains a host index over the content root: `imp-graph` local node ids and `notation` tip `id` map to opaque Mir record ids.
+- Mir record ids **may** be path-shaped text-store keys internally; they are **not** the product API and **must not** be joined from a NodeId.
 
 ## Document origin
 
-- Every non-untitled tab records a `DocumentOrigin`: `Filesystem { path }` or `Miro { content_root, record_id }`.
-- Filesystem opens dedupe by path. Miro opens dedupe by `(content_root, record_id)`.
-- Miro tabs still expose a derived **authoring path** (`content_root` + record id segments) for Save and library-neighbor hints. Save writes the text SoT; it does not write SQLite as authoring truth.
+- Every non-untitled tab records a `DocumentOrigin`: `Filesystem { path }` or `Miro { content_root, node_id, mir_record_id }`.
+- Filesystem opens dedupe by path. Miro opens dedupe by `(content_root, mir_record_id)` so multiple NodeIds in the same blob share one tab.
+- Miro tabs expose an authoring path derived from the Mir record id (not from the NodeId) for Save and library-neighbor hints. Save writes the text SoT; it does not write SQLite as authoring truth.
 
 ## Pull semantics
 
-- Pull is `poll_watch` → `pull_record` → `open_document_bytes` → `ModelGraph` (same stack as filesystem bytes).
+- Pull is host index resolve → `poll_watch` → `pull_record(mir_record_id)` → `open_document_bytes` → `ModelGraph` (same stack as filesystem bytes).
 - Imp graphs keep edge topology when endpoints lack a local `Graph.nodes` entry; missing cards / typecheck errors behave as for any incomplete graph ([`graph-dag.md`](graph-dag.md)). Resolving those ids by a further Miro pull is later host policy.
 
 ## Non-goals (this slice)

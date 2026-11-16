@@ -11,12 +11,16 @@ use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
 use aura_ext_notation::Notation;
+use aura_integration::authoring_path_for_mir_record;
 use imp_core_types::{Graph, Node, NodeId};
 use serde_json::Value;
 
 use crate::extensions::StackedOpen;
 
-/// Node id used for the nullary score node that backs a notation document tip.
+/// Legacy placeholder NodeId for untitled / pre-tip-id notation documents.
+///
+/// Miro-indexed notation tips carry a stable tip `id` instead; do not use this as a
+/// product open key.
 pub const NOTATION_SCORE_NODE_ID: &str = "score";
 
 /// Imp node type for notation-document nullary literals (host-provided score).
@@ -27,7 +31,8 @@ pub use imp_documents::DocumentId;
 /// How an open document was materialized into app memory.
 ///
 /// Filesystem opens and Miro pulls are parallel workflows. Miro tabs dedupe by
-/// `(content_root, record_id)`; filesystem tabs dedupe by path.
+/// `(content_root, mir_record_id)`; filesystem tabs dedupe by path. Product Miro
+/// identity is [`DocumentOrigin::Miro::node_id`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DocumentOrigin {
     /// Loaded (or saved) as a filesystem path.
@@ -39,8 +44,10 @@ pub enum DocumentOrigin {
     Miro {
         /// Text authoring root for the Miro session.
         content_root: PathBuf,
-        /// Opaque Mir record id (root-relative path with `/` separators).
-        record_id: String,
+        /// Product NodeId used to open / resolve this tab.
+        node_id: String,
+        /// Opaque Mir record id (host text-store key) for dedupe and Save path.
+        mir_record_id: String,
     },
 }
 
@@ -51,19 +58,11 @@ impl DocumentOrigin {
             Self::Filesystem { path } => path.clone(),
             Self::Miro {
                 content_root,
-                record_id,
-            } => authoring_path_for_record(content_root, record_id),
+                mir_record_id,
+                ..
+            } => authoring_path_for_mir_record(content_root, mir_record_id),
         }
     }
-}
-
-/// Joins a Miro record id onto a content root (`/`-separated id segments).
-pub fn authoring_path_for_record(content_root: &Path, record_id: &str) -> PathBuf {
-    let mut path = content_root.to_path_buf();
-    for segment in record_id.split('/').filter(|s| !s.is_empty()) {
-        path.push(segment);
-    }
-    path
 }
 
 /// Aura-owned structured data attached to a model node (not Imp `PrimitiveValue`).
@@ -92,8 +91,11 @@ impl ModelGraph {
     }
 
     /// Builds a one-node model for a notation document tip.
+    ///
+    /// Uses the tip `id` when present; otherwise [`NOTATION_SCORE_NODE_ID`] for
+    /// untitled / legacy documents (not a Miro open key).
     pub fn from_notation(notation: Notation) -> Self {
-        let node_id = NOTATION_SCORE_NODE_ID.to_string();
+        let node_id = notation.tip_node_id().to_string();
         let mut nodes = BTreeMap::new();
         nodes.insert(
             node_id.clone(),
@@ -118,16 +120,16 @@ impl ModelGraph {
 
     /// Embedded notation on the notation-document nullary node, if present.
     pub fn notation(&self) -> Option<&Notation> {
-        match self.embedded.get(NOTATION_SCORE_NODE_ID)? {
-            EmbeddedPayload::Notation(notation) => Some(notation),
-        }
+        self.embedded.values().next().map(|payload| match payload {
+            EmbeddedPayload::Notation(notation) => notation,
+        })
     }
 
     /// Mutable embedded notation on the notation-document nullary node, if present.
     pub fn notation_mut(&mut self) -> Option<&mut Notation> {
-        match self.embedded.get_mut(NOTATION_SCORE_NODE_ID)? {
-            EmbeddedPayload::Notation(notation) => Some(notation),
-        }
+        self.embedded.values_mut().next().map(|payload| match payload {
+            EmbeddedPayload::Notation(notation) => notation,
+        })
     }
 
     /// True when this model is a notation-document tip (nullary embedded score).
@@ -297,22 +299,23 @@ impl DocumentStore {
 
     /// Opens a Miro-pulled stacked document, or activates an existing Miro tab.
     ///
-    /// Dedupes on `(content_root, record_id)`. Sets the session path to the derived
-    /// authoring path for Save / neighbor hints.
+    /// Dedupes on `(content_root, mir_record_id)` so two NodeIds in the same Mir
+    /// blob share one tab. Sets the session path from the Mir record id for Save.
     pub fn open_or_activate_miro(
         &mut self,
         content_root: PathBuf,
-        record_id: String,
+        node_id: String,
+        mir_record_id: String,
         opened: StackedOpen,
     ) -> Option<DocumentId> {
-        if let Some(id) = self.find_miro(&content_root, &record_id) {
+        if let Some(id) = self.find_miro_blob(&content_root, &mir_record_id) {
             self.select(id);
             return Some(id);
         }
 
         let tip_type = opened.type_chain.last()?.as_str();
         let payload = DocumentPayload::from_tip(tip_type, opened.payload)?;
-        let authoring = authoring_path_for_record(&content_root, &record_id);
+        let authoring = authoring_path_for_mir_record(&content_root, &mir_record_id);
         let id = self.inner.open_or_activate(
             authoring,
             opened.type_chain,
@@ -323,18 +326,20 @@ impl DocumentStore {
             id,
             DocumentOrigin::Miro {
                 content_root,
-                record_id,
+                node_id,
+                mir_record_id,
             },
         );
         Some(id)
     }
 
-    fn find_miro(&self, content_root: &Path, record_id: &str) -> Option<DocumentId> {
+    fn find_miro_blob(&self, content_root: &Path, mir_record_id: &str) -> Option<DocumentId> {
         self.origins.iter().find_map(|(id, origin)| match origin {
             DocumentOrigin::Miro {
                 content_root: root,
-                record_id: rid,
-            } if root == content_root && rid == record_id => Some(*id),
+                mir_record_id: rid,
+                ..
+            } if root == content_root && rid == mir_record_id => Some(*id),
             _ => None,
         })
     }
@@ -441,10 +446,23 @@ mod tests {
             .graph
             .nodes
             .get(NOTATION_SCORE_NODE_ID)
-            .expect("score node");
+            .expect("legacy score node");
         assert_eq!(node.node_type, NOTATION_SCORE_NODE_TYPE);
         assert!(node.inputs.is_empty());
         assert!(model.graph.edges.is_empty());
+    }
+
+    #[test]
+    fn notation_tip_id_becomes_model_node_id() {
+        let mut notation = Notation::empty();
+        notation.id = Some("TIPID00000000000000000001".into());
+        let model = ModelGraph::from_notation(notation);
+        assert!(model.graph.nodes.contains_key("TIPID00000000000000000001"));
+        assert!(!model.graph.nodes.contains_key(NOTATION_SCORE_NODE_ID));
+        assert_eq!(
+            model.notation().expect("notation").tip_node_id(),
+            "TIPID00000000000000000001"
+        );
     }
 
     #[test]
@@ -494,7 +512,7 @@ mod tests {
     }
 
     #[test]
-    fn miro_origin_dedupes_by_record_id() {
+    fn miro_origin_dedupes_by_mir_record_id() {
         let mut store = DocumentStore::new();
         let root = PathBuf::from("/content");
         let opened = StackedOpen {
@@ -514,7 +532,12 @@ mod tests {
             }),
         };
         let id1 = store
-            .open_or_activate_miro(root.clone(), "a.json".into(), opened)
+            .open_or_activate_miro(
+                root.clone(),
+                "NODEA".into(),
+                "a.json".into(),
+                opened,
+            )
             .expect("open");
         let opened2 = StackedOpen {
             type_chain: vec![
@@ -532,8 +555,14 @@ mod tests {
                 edges: BTreeMap::new(),
             }),
         };
+        // Different NodeId, same Mir blob → same tab.
         let id2 = store
-            .open_or_activate_miro(root.clone(), "a.json".into(), opened2)
+            .open_or_activate_miro(
+                root.clone(),
+                "NODEB".into(),
+                "a.json".into(),
+                opened2,
+            )
             .expect("reopen");
         assert_eq!(id1, id2);
         assert_eq!(store.documents().len(), 1);
@@ -541,16 +570,9 @@ mod tests {
             store.origin(id1),
             Some(&DocumentOrigin::Miro {
                 content_root: root,
-                record_id: "a.json".into(),
+                node_id: "NODEA".into(),
+                mir_record_id: "a.json".into(),
             })
-        );
-    }
-
-    #[test]
-    fn authoring_path_splits_record_segments() {
-        assert_eq!(
-            authoring_path_for_record(Path::new("/root"), "demos/a.json"),
-            PathBuf::from("/root/demos/a.json")
         );
     }
 }

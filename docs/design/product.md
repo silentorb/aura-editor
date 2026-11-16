@@ -28,7 +28,7 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Imp graph documents support create, modify, and save in the `graph-dag` view (see [`graph-dag.md`](graph-dag.md)).
 - Notation documents support create, modify, and save in the piano-roll view, which edits the nullary node’s embedded notation (see [`piano-roll.md`](piano-roll.md)).
 - Open document paths and the active tab are restored from ephemeral user state under the Aura user directory (see [`user-state.md`](user-state.md)); untitled tabs and pan/zoom are not.
-- A **parallel Miro pull workflow** can open a content-root session and materialize SQLite projection records into `ModelGraph` tabs (`open_miro_workspace` / `open_miro_record_tab`). File → Open remains filesystem-only until a later slice attaches UI; see [`miro.md`](miro.md).
+- A **parallel Miro pull workflow** can open a content-root session and materialize Mir blobs into `ModelGraph` tabs by **NodeId** (`open_miro_workspace` / `open_miro_node_tab`). File → Open remains filesystem-only until a later slice attaches UI; see [`miro.md`](miro.md).
 - Shell body layout (documents and properties panes) is an Iced `pane_grid`: users may drag panes to rearrange and resize splits; the layout tree is persisted as user state (see [`user-state.md`](user-state.md)). The default arrangement is documents | properties, with Properties on the right of Documents. The active view’s tool strip lives inside the Documents pane (below the tab bar). A fixed status bar at the bottom of the window shows errors and transport feedback.
 - Extensibility (commands, views, document types, and user-state) follows [`extensions.md`](extensions.md).
 
