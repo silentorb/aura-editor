@@ -47,6 +47,7 @@ fn key_input_dispatches_bound_close() {
     let _ = app.update(Message::KeyInput {
         key: Key::Character("w".into()),
         modifiers: Modifiers::CTRL,
+        pressed: true,
     });
     assert!(app.documents().documents().is_empty());
 }
@@ -61,6 +62,7 @@ fn unbound_key_is_ignored() {
     let _ = app.update(Message::KeyInput {
         key: Key::Character("x".into()),
         modifiers: Modifiers::CTRL,
+        pressed: true,
     });
     assert_eq!(app.documents().documents().len(), 1);
 }
@@ -224,6 +226,7 @@ fn space_dispatches_play_toggle() {
     let _ = app.update(Message::KeyInput {
         key: Key::Named(Named::Space),
         modifiers: Modifiers::empty(),
+        pressed: true,
     });
 
     // Device may be absent under WSL; toggle must still resolve without panic.

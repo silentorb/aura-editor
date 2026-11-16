@@ -525,7 +525,7 @@ mod tests {
         assert!(runtime.has_user_state(aura_interfaces::USER_STATE_SHELL_LAYOUT));
         assert!(runtime.has_command(aura_interfaces::CMD_DOCUMENT_NEW_NOTATION));
         assert!(runtime.has_command(aura_interfaces::CMD_DOCUMENT_NEW_GRAPH));
-        assert!(runtime.has_command(aura_interfaces::CMD_GRAPH_TOOL_SELECT));
+        assert!(runtime.has_command(aura_interfaces::CMD_GRAPH_ADD_NODE));
         assert!(runtime.has_document_type(aura_interfaces::DOC_TYPE_NOTATION));
         assert_eq!(
             runtime.view_for_role(aura_interfaces::ROLE_NOTATION),

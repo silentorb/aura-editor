@@ -71,10 +71,10 @@ Declarative requirements for ephemeral Aura Editor user-state persistence. Produ
 ## Graph DAG UI
 
 - Extension `aura-builtin` contributes entry `graph-dag-ui` in bucket `aura-builtin`.
-- Entry shape: `activeTool` (`select` | `add` | `connect` | `erase`), `connectionMode` (`simple` | `precise`), `addNodeType` (string node type id).
-- Defaults when missing: select tool, simple connection mode, `addNodeType` `sine`.
-- Collect on tool, connection-mode, and add-type changes; apply once at startup when the component is enabled.
-- Selection and in-progress connect state are session-only (not persisted). Prefs are global across all graph tabs.
+- Entry shape: `connectionMode` (`simple` | `precise`), `addNodeType` (string node type id; last type chosen in the Add node dialog).
+- Defaults when missing: simple connection mode, `addNodeType` `sine`. Unknown legacy fields (e.g. former `activeTool`) are ignored.
+- Collect on connection-mode and add-type changes; apply once at startup when the component is enabled.
+- Selection, in-progress connect draft, and the open Add-node dialog are session-only (not persisted). Prefs are global across all graph tabs.
 
 ## Shell layout
 

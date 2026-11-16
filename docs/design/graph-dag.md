@@ -1,6 +1,6 @@
 # Graph DAG view
 
-Declarative requirements for the Imp `graph-dag` view: visualization, modal tools, and connection editing. Product context: [`product.md`](product.md). User-state: [`user-state.md`](user-state.md).
+Declarative requirements for the Imp `graph-dag` view: visualization, always-on pointer editing, and connection modes. Product context: [`product.md`](product.md). User-state: [`user-state.md`](user-state.md).
 
 ## Role
 
@@ -15,23 +15,22 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 - Aura Editor depends on those crates and hosts compose UI blocks into the product toolbar, Properties pane, menus, commands, Aura JSON save format, and Aura node-type registry wiring.
 - `imp_graph_editor` and `imp_documents` must not depend on `aura_*` crates.
 
-## Tools
+## Pointer model (no modal tools)
 
-- Modal tools live on the Documents pane tool strip (below the tab bar): **Select**, **Add**, **Connect**, **Erase**.
-- Tool choice is global across all open graph tabs (see user-state `graph-dag-ui`).
-- Default keyboard bindings when a graph tab is active: `S` Select, `A` Add, `C` Connect, `E` Erase. **Delete** removes the current selection in Select.
+Graph editing does **not** use mutually exclusive modal tools (unlike the piano-roll). Selection and wiring are always available; Add is a discrete command; delete is keyboard-on-selection.
 
-| Tool | Behavior |
-|------|----------|
-| Select | Click a node or edge to select; click empty space clears selection. With a node selected, the Properties pane exposes rename (id) and change type. Middle-button or empty-space drag pans; wheel zooms. |
-| Add | Click empty canvas inserts a node of the current Add type with a unique id; layout regenerates. |
-| Connect | Creates an edge according to the active connection mode (below). |
-| Erase | Click a node removes it and all incident edges. Click an edge removes that edge; in **Simple** mode a visual node→node line removes all edges between that pair. |
+| Action | Behavior |
+|--------|----------|
+| Select | Click a node or edge to select; empty-space drag pans (selection clear on empty click is not required when pan wins). With a node selected, the Properties pane exposes rename (id) and change type. Middle-button drag pans; wheel zooms. |
+| Add node | Command `graph.add.node` (toolbar **Add node** button; key `A` when a graph tab is active) opens a modal to choose a node type. Submit inserts a node of that type with a unique id and regenerates layout; Cancel/Escape closes with no edit. Last-used type is remembered in user state. |
+| Connect | Always-on drag-to-connect per connection mode (below), with a rubber-band preview while dragging. Not a toolbar tool. |
+| Disconnect port | In **Precise** mode, **right-click** a port handle to remove every edge attached to that port. |
+| Delete | **Delete** / **Backspace** removes the current selection (node or edge). There is no Erase tool or click-to-erase. |
 
 ## Connection modes
 
-- **Simple**: edges are drawn node-to-node (ports ignored for display). Connecting clicks a source node then a target node; the editor auto-pairs an unused compatible output→input from the node-type registry. If no pair exists, the action fails with a status message.
-- **Precise**: nodes show labeled port lists — input ports (left) and output ports (right), each as a circle with its port id beside it. Connecting drags from an output handle to an input handle. Edge endpoints attach to the chosen ports. Node height grows with `max(inputs, outputs)` when ports are shown. Automatic layered layout spaces same-rank nodes and content bounds using those rendered sizes (not the simple-mode box).
+- **Simple**: edges are drawn node-to-node (ports ignored for display). Press on a source node and drag to a target node; a rubber-band line follows the cursor. Release on another node auto-pairs an unused compatible output→input from the node-type registry. Release elsewhere (or without enough movement) cancels the connect and a short press selects. If no pair exists, the action fails with a status message.
+- **Precise**: nodes show labeled port lists — input ports (left) and output ports (right), each as a circle with its port id beside it. Press an output handle and drag to a compatible input handle (or variadic dummy); a rubber-band line follows the cursor until release. Release on a valid input completes the edge; release elsewhere cancels. Node body / edge clicks select. **Right-click** a port handle disconnects all edges on that port (dummy handles are no-ops). Node height grows with `max(inputs, outputs)` when ports are shown. Automatic layered layout spaces same-rank nodes and content bounds using those rendered sizes (not the simple-mode box).
 - Connection mode is global across graph tabs and is toggled from **Graph view options** via a **Precise ports** checkbox (checked = Precise, unchecked = Simple).
 
 ### Auto-pair rules (Simple)
@@ -47,15 +46,15 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 - Catalog ports marked `variadic` expand into one left-side handle per inbound edge (sorted by `Edge.order`), plus a trailing empty **dummy** handle for appending a new connection.
 - Precise connect targets the dummy (append) or a singleton input; filled variadic handles are not connect targets.
 - New edges into a variadic port store a unique `order` (`0..n-1` contiguous after reorder).
-- With the **Select** tool in Precise mode, drag a filled variadic handle vertically among its siblings to reorder; on drop, `Edge.order` values are rewritten. The dummy is not reorderable.
+- In Precise mode, drag a filled variadic handle vertically among its siblings to reorder; on drop, `Edge.order` values are rewritten. The dummy is not reorderable.
 
 ## Toolbar
 
 ```
-[Select] [Add ▾] [Connect] [Erase]     <space>     [Graph view options ▾]
+[Add node]     <space>     [Graph view options ▾]
 ```
 
-- **Add ▾** lists node types from the playback registry; choosing a type sets the Add type and activates Add.
+- **Add node** runs `graph.add.node` (opens the type modal).
 - **Graph view options ▾** (far right) holds global view prefs. First control: **Precise ports** checkbox toggle. More options may join later without relocating the control.
 
 ## Selection and update
@@ -71,7 +70,9 @@ Declarative requirements for the Imp `graph-dag` view: visualization, modal tool
 ## Non-goals / avoided approaches
 
 - Freeform manual node placement or persisted layout positions
-- Per-document connection mode or tool choice
+- Modal Select / Add / Connect / Erase tools on the graph toolbar (notation-style tool modality)
+- Click-to-place Add or click-to-erase on the canvas
+- Per-document connection mode
 - Full input-literal / property inspector for node inputs
 - Undo/redo
 - Opening GraphLibrary catalogs as editable documents

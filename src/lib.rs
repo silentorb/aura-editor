@@ -31,12 +31,12 @@ pub use extensions::{
 pub use aura_graph_json::graph_to_aura_json;
 pub use graph_file::OpenError;
 pub use imp_graph_editor::{
-    add_edge, add_node, add_type_picker, auto_pair_ports, center_translation, clamp_scale,
+    add_edge, add_node, add_node_type_dialog, auto_pair_ports, center_translation, clamp_scale,
     graph_canvas, layout_graph, node_properties_editor, pan_by, precise_ports_checkbox, remove_edge,
-    remove_edges_between, remove_node, rename_node, reorder_variadic_inputs, set_node_type,
-    tool_strip, unique_node_id, zoom_at_point, CatalogPort, ConnectDraft, ConnectionMode,
-    GraphChromeMessage, GraphEdit, GraphEditError, GraphLayout, GraphTool, GraphUiEntry,
-    GraphUiState, GraphView, LaidOutNode, NodePortInfo, NodeTypeCatalog, PortCatalog,
+    remove_edges_at_port, remove_edges_between, remove_node, rename_node, reorder_variadic_inputs,
+    set_node_type, unique_node_id, zoom_at_point, CatalogPort, ConnectDraft, ConnectionMode,
+    GraphChromeMessage, GraphEdit, GraphEditError, GraphLayout, GraphUiEntry, GraphUiState,
+    GraphView, LaidOutNode, NodePortInfo, NodeTypeCatalog, PortCatalog,
 };
 pub use logging::init_logging;
 pub use piano_roll_ui::{PianoRollUiEntry, PianoRollUiState};
@@ -55,14 +55,14 @@ pub use aura_ext_notation::{
 };
 pub use aura_interfaces::{
     CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_NEW_GRAPH, CMD_DOCUMENT_NEW_NOTATION, CMD_DOCUMENT_OPEN,
-    CMD_DOCUMENT_SAVE, CMD_GRAPH_DELETE_SELECTION, CMD_GRAPH_TOOL_ADD, CMD_GRAPH_TOOL_CONNECT,
-    CMD_GRAPH_TOOL_ERASE, CMD_GRAPH_TOOL_SELECT, CMD_NOTATION_SNAP_TOGGLE, CMD_NOTATION_TOOL_DRAW,
-    CMD_NOTATION_TOOL_ERASE, CMD_NOTATION_TOOL_SELECT, CMD_PLAY_START, CMD_PLAY_STOP,
-    CMD_PLAY_TOGGLE, DOC_TYPE_AURA_JSON, DOC_TYPE_IMP_GRAPH, DOC_TYPE_IMP_GRAPH_LIBRARY,
-    DOC_TYPE_JSON, DOC_TYPE_NOTATION, ROLE_IMP_GRAPH, ROLE_JSON, ROLE_NOTATION,
-    USER_STATE_BUCKET_BUILTIN, USER_STATE_BUCKET_DOCUMENTS, USER_STATE_BUCKET_NOTATION,
-    USER_STATE_BUCKET_SHELL, USER_STATE_GRAPH_DAG_UI, USER_STATE_OPEN_DOCUMENTS,
-    USER_STATE_PIANO_ROLL_UI, USER_STATE_SHELL_LAYOUT, VIEW_GRAPH_DAG, VIEW_PIANO_ROLL,
+    CMD_DOCUMENT_SAVE, CMD_GRAPH_ADD_NODE, CMD_GRAPH_DELETE_SELECTION, CMD_NOTATION_SNAP_TOGGLE,
+    CMD_NOTATION_TOOL_DRAW, CMD_NOTATION_TOOL_ERASE, CMD_NOTATION_TOOL_SELECT, CMD_PLAY_START,
+    CMD_PLAY_STOP, CMD_PLAY_TOGGLE, DOC_TYPE_AURA_JSON, DOC_TYPE_IMP_GRAPH,
+    DOC_TYPE_IMP_GRAPH_LIBRARY, DOC_TYPE_JSON, DOC_TYPE_NOTATION, ROLE_IMP_GRAPH, ROLE_JSON,
+    ROLE_NOTATION, USER_STATE_BUCKET_BUILTIN, USER_STATE_BUCKET_DOCUMENTS,
+    USER_STATE_BUCKET_NOTATION, USER_STATE_BUCKET_SHELL, USER_STATE_GRAPH_DAG_UI,
+    USER_STATE_OPEN_DOCUMENTS, USER_STATE_PIANO_ROLL_UI, USER_STATE_SHELL_LAYOUT, VIEW_GRAPH_DAG,
+    VIEW_PIANO_ROLL,
 };
 
 use std::collections::HashMap;
@@ -74,8 +74,9 @@ use aura_imp::{aura_registry, get_node_type, list_node_types};
 use aura_io_cpal::PlaybackEngine;
 use aura_sample::SampleRate;
 use iced::keyboard::{self, key::Named, Key, Modifiers};
-use iced::widget::{button, column, container, pane_grid, pick_list, row, text, Space};
-use iced::{time, Element, Fill, Padding, Renderer, Subscription, Task, Theme};
+use iced::widget::{button, column, container, pane_grid, pick_list, row, stack, text, Space};
+use iced::{time, Alignment, Color, Element, Fill, Length, Padding, Renderer, Subscription, Task,
+    Theme};
 use iced_aw::menu::{Menu, MenuBar};
 use iced_aw::menu_items;
 use native_theme_iced::{
@@ -107,8 +108,10 @@ pub struct App {
     user_state: UserStateStore,
     /// Notation tool / snap prefs (persisted when enabled).
     piano_roll_ui: PianoRollUiState,
-    /// Graph-dag tool / connection-mode prefs (persisted when enabled).
+    /// Graph-dag connection-mode prefs (persisted when enabled).
     graph_ui: GraphUiState,
+    /// Open Add-node dialog type selection (session-only).
+    add_node_dialog: Option<String>,
     /// Parked playhead beats keyed by open notation document.
     playheads: HashMap<DocumentId, f64>,
     /// CPAL stream owner for the active playback graph.
@@ -165,6 +168,8 @@ pub enum Message {
     KeyInput {
         key: Key,
         modifiers: Modifiers,
+        /// `true` for press, `false` for release (release updates modifiers only).
+        pressed: bool,
     },
     /// Run a bindable command (from bindings or tests).
     Command(CommandId),
@@ -251,6 +256,7 @@ impl App {
             user_state: UserStateStore::in_memory(),
             piano_roll_ui: PianoRollUiState::default(),
             graph_ui: GraphUiState::new("sine"),
+            add_node_dialog: None,
             playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
             playback_end_secs: None,
@@ -282,6 +288,7 @@ impl App {
             user_state,
             piano_roll_ui,
             graph_ui,
+            add_node_dialog: None,
             playheads: HashMap::new(),
             playback: PlaybackEngine::new(),
             playback_end_secs: None,
@@ -390,7 +397,11 @@ impl App {
                 modifiers,
                 repeat: false,
                 ..
-            } => Some(Message::KeyInput { key, modifiers }),
+            } => Some(Message::KeyInput {
+                key,
+                modifiers,
+                pressed: true,
+            }),
             _ => None,
         });
         if self.playback.is_playing() {
@@ -474,9 +485,22 @@ impl App {
                     .unwrap_or(0.0);
                 return self.sync_open_documents_task();
             }
-            Message::KeyInput { key, modifiers } => {
+            Message::KeyInput {
+                key,
+                modifiers,
+                pressed,
+            } => {
+                if !pressed {
+                    return Task::none();
+                }
+                if self.add_node_dialog.is_some() {
+                    if matches!(key, Key::Named(Named::Escape)) {
+                        self.add_node_dialog = None;
+                    }
+                    return Task::none();
+                }
                 if self.active_is_graph() && modifiers.is_empty() {
-                    if let Some(command) = graph_tool_command_for_key(&key) {
+                    if let Some(command) = graph_command_for_key(&key) {
                         return self.update(Message::Command(CommandId::new(command)));
                     }
                 }
@@ -543,25 +567,11 @@ impl App {
                         self.piano_roll_ui.snap_enabled = !self.piano_roll_ui.snap_enabled;
                         return self.sync_piano_roll_ui_task();
                     }
-                    CMD_GRAPH_TOOL_SELECT => {
-                        self.graph_ui.tool = GraphTool::Select;
-                        self.graph_ui.connect_draft = None;
-                        return self.sync_graph_ui_task();
-                    }
-                    CMD_GRAPH_TOOL_ADD => {
-                        self.graph_ui.tool = GraphTool::Add;
-                        self.graph_ui.connect_draft = None;
-                        return self.sync_graph_ui_task();
-                    }
-                    CMD_GRAPH_TOOL_CONNECT => {
-                        self.graph_ui.tool = GraphTool::Connect;
-                        self.graph_ui.connect_draft = None;
-                        return self.sync_graph_ui_task();
-                    }
-                    CMD_GRAPH_TOOL_ERASE => {
-                        self.graph_ui.tool = GraphTool::Erase;
-                        self.graph_ui.connect_draft = None;
-                        return self.sync_graph_ui_task();
+                    CMD_GRAPH_ADD_NODE => {
+                        if !self.active_is_graph() {
+                            return Task::none();
+                        }
+                        self.add_node_dialog = Some(self.graph_ui.add_node_type.clone());
                     }
                     CMD_GRAPH_DELETE_SELECTION => {
                         return self.delete_graph_selection();
@@ -836,16 +846,19 @@ impl App {
 
     fn apply_graph_chrome(&mut self, chrome: GraphChromeMessage) -> Task<Message> {
         match chrome {
-            GraphChromeMessage::SetTool(tool) => {
-                self.graph_ui.tool = tool;
-                self.graph_ui.connect_draft = None;
-                return self.sync_graph_ui_task();
-            }
             GraphChromeMessage::SetAddNodeType(node_type) => {
-                self.graph_ui.add_node_type = node_type;
-                self.graph_ui.tool = GraphTool::Add;
-                self.graph_ui.connect_draft = None;
-                return self.sync_graph_ui_task();
+                if self.add_node_dialog.is_some() {
+                    self.add_node_dialog = Some(node_type);
+                } else {
+                    self.graph_ui.add_node_type = node_type;
+                    return self.sync_graph_ui_task();
+                }
+            }
+            GraphChromeMessage::AddNodeConfirm => {
+                return self.confirm_add_node_dialog();
+            }
+            GraphChromeMessage::AddNodeCancel => {
+                self.add_node_dialog = None;
             }
             GraphChromeMessage::SetConnectionMode(mode) => {
                 self.graph_ui.connection_mode = mode;
@@ -863,6 +876,22 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    fn confirm_add_node_dialog(&mut self) -> Task<Message> {
+        let Some(node_type) = self.add_node_dialog.take() else {
+            return Task::none();
+        };
+        let Some(document_id) = self.documents.active_id() else {
+            return Task::none();
+        };
+        if !self.active_is_graph() {
+            return Task::none();
+        }
+        self.graph_ui.add_node_type = node_type;
+        let sync = self.sync_graph_ui_task();
+        let add = self.apply_graph_edit(document_id, GraphEdit::AddNode);
+        Task::batch(vec![sync, add])
     }
 
     fn apply_graph_edit(&mut self, document_id: DocumentId, edit: GraphEdit) -> Task<Message> {
@@ -1039,6 +1068,28 @@ impl App {
                     doc.dirty = true;
                     self.status_notice = None;
                     self.graph_ui.clear_selection();
+                }
+            }
+            GraphEdit::DisconnectPort {
+                node_id,
+                port_id,
+                is_output,
+            } => {
+                let Some(doc) = self.documents.get_mut(document_id) else {
+                    return Task::none();
+                };
+                let Some(graph) = doc.payload.graph_mut() else {
+                    return Task::none();
+                };
+                let removed = remove_edges_at_port(graph, &node_id, &port_id, is_output);
+                if removed > 0 {
+                    doc.dirty = true;
+                    self.status_notice = None;
+                    if let Some(selected) = &self.graph_ui.selected_edge {
+                        if !graph.edges.contains_key(selected) {
+                            self.graph_ui.clear_selection();
+                        }
+                    }
                 }
             }
         }
@@ -1287,13 +1338,58 @@ impl App {
             .padding(8)
             .style(styles::toolbar(&self.resolved));
 
-        column![
+        let shell: Element<'_, Message> = column![
             menu_bar::global_menu_bar(&self.resolved, &self.accessibility),
             panes,
             status_bar,
         ]
         .spacing(0)
-        .into()
+        .into();
+
+        if let Some(selected_type) = &self.add_node_dialog {
+            let type_ids = available_node_types(
+                self.documents
+                    .active_document()
+                    .and_then(|doc| doc.path.as_deref()),
+            );
+            let dialog = container(
+                add_node_type_dialog(
+                    type_ids,
+                    selected_type.clone(),
+                    &self.resolved,
+                    &self.accessibility,
+                )
+                .map(Message::GraphChrome),
+            )
+            .width(Length::Fixed(320.0))
+            .style(styles::container_card(&self.resolved));
+
+            let backdrop: Element<'_, Message> = container(Space::new().width(Fill).height(Fill))
+                .width(Fill)
+                .height(Fill)
+                .style(|_theme| iced::widget::container::Style {
+                    background: Some(
+                        Color {
+                            a: 0.45,
+                            ..Color::BLACK
+                        }
+                        .into(),
+                    ),
+                    ..Default::default()
+                })
+                .into();
+
+            let overlay: Element<'_, Message> = container(dialog)
+                .width(Fill)
+                .height(Fill)
+                .align_x(Alignment::Center)
+                .align_y(Alignment::Center)
+                .into();
+
+            stack([shell, backdrop, overlay]).into()
+        } else {
+            shell
+        }
     }
 
     fn view_toolbar_pane(&self) -> Element<'_, Message> {
@@ -1326,23 +1422,14 @@ impl App {
     }
 
     fn graph_tool_bar(&self) -> Element<'_, Message> {
-        let type_ids = available_node_types(
-            self.documents
-                .active_document()
-                .and_then(|doc| doc.path.as_deref()),
-        );
         let body = font_size(&self.resolved, &self.accessibility);
-        let left = row![
-            tool_strip(self.graph_ui.tool, &self.resolved).map(Message::GraphChrome),
-            add_type_picker(
-                type_ids,
-                self.graph_ui.add_node_type.clone(),
-                &self.resolved,
-                &self.accessibility,
-            )
-            .map(Message::GraphChrome),
-        ]
-        .spacing(6);
+        let add_button = button(at_least(
+            text("Add node").size(body),
+            button_content_min_size(&self.resolved),
+        ))
+        .on_press(Message::Command(CommandId::new(CMD_GRAPH_ADD_NODE)))
+        .padding(button_padding(&self.resolved))
+        .style(styles::button(&self.resolved));
 
         let precise_ports = self.graph_ui.connection_mode == ConnectionMode::Precise;
         let options_menu = Menu::new(menu_items!(
@@ -1366,9 +1453,9 @@ impl App {
         .close_on_background_click(true)
         .style(styles::aw::menu(&self.resolved));
 
-        row![left, Space::new().width(Fill), options]
+        row![add_button, Space::new().width(Fill), options]
             .spacing(8)
-            .align_y(iced::Alignment::Center)
+            .align_y(Alignment::Center)
             .into()
     }
 
@@ -1461,9 +1548,8 @@ impl App {
                     Some(graph) => {
                         let ports = build_port_catalog(graph, doc.path.as_deref());
                         let document_id = doc.id;
-                        graph_canvas(document_id.get(), graph, &self.graph_ui, ports).map(
-                            move |edit| Message::Graph { document_id, edit },
-                        )
+                        graph_canvas(document_id.get(), graph, &self.graph_ui, ports)
+                            .map(move |edit| Message::Graph { document_id, edit })
                     }
                     None => view_error_placeholder(
                         format!(
@@ -1618,13 +1704,10 @@ fn restore_shell_layout(
     state_from_entry(entry.as_ref())
 }
 
-fn graph_tool_command_for_key(key: &Key) -> Option<&'static str> {
+fn graph_command_for_key(key: &Key) -> Option<&'static str> {
     match key {
         Key::Character(text) => match text.as_str() {
-            "s" | "S" => Some(CMD_GRAPH_TOOL_SELECT),
-            "a" | "A" => Some(CMD_GRAPH_TOOL_ADD),
-            "c" | "C" => Some(CMD_GRAPH_TOOL_CONNECT),
-            "e" | "E" => Some(CMD_GRAPH_TOOL_ERASE),
+            "a" | "A" => Some(CMD_GRAPH_ADD_NODE),
             _ => None,
         },
         Key::Named(Named::Delete) | Key::Named(Named::Backspace) => {

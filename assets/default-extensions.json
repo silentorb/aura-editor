@@ -62,34 +62,10 @@
       "params": {}
     },
     {
-      "id": "graph.tool.select",
+      "id": "graph.add.node",
       "extensionId": "aura-builtin",
       "kind": "command",
-      "implementationId": "graph.tool.select",
-      "enabled": true,
-      "params": {}
-    },
-    {
-      "id": "graph.tool.add",
-      "extensionId": "aura-builtin",
-      "kind": "command",
-      "implementationId": "graph.tool.add",
-      "enabled": true,
-      "params": {}
-    },
-    {
-      "id": "graph.tool.connect",
-      "extensionId": "aura-builtin",
-      "kind": "command",
-      "implementationId": "graph.tool.connect",
-      "enabled": true,
-      "params": {}
-    },
-    {
-      "id": "graph.tool.erase",
-      "extensionId": "aura-builtin",
-      "kind": "command",
-      "implementationId": "graph.tool.erase",
+      "implementationId": "graph.add.node",
       "enabled": true,
       "params": {}
     },

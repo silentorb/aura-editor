@@ -5,9 +5,9 @@ mod document_types;
 use aura_interfaces::{
     CommandDescriptor, CommandHost, DocumentTypeHost, UserStateDescriptor, UserStateHost,
     ViewDescriptor, ViewHost, CMD_DOCUMENT_CLOSE_ACTIVE, CMD_DOCUMENT_NEW_GRAPH, CMD_DOCUMENT_OPEN,
-    CMD_GRAPH_DELETE_SELECTION, CMD_GRAPH_TOOL_ADD, CMD_GRAPH_TOOL_CONNECT, CMD_GRAPH_TOOL_ERASE,
-    CMD_GRAPH_TOOL_SELECT, CMD_PLAY_START, CMD_PLAY_STOP, CMD_PLAY_TOGGLE, ROLE_IMP_GRAPH,
-    USER_STATE_GRAPH_DAG_UI, USER_STATE_OPEN_DOCUMENTS, USER_STATE_SHELL_LAYOUT, VIEW_GRAPH_DAG,
+    CMD_GRAPH_ADD_NODE, CMD_GRAPH_DELETE_SELECTION, CMD_PLAY_START, CMD_PLAY_STOP, CMD_PLAY_TOGGLE,
+    ROLE_IMP_GRAPH, USER_STATE_GRAPH_DAG_UI, USER_STATE_OPEN_DOCUMENTS, USER_STATE_SHELL_LAYOUT,
+    VIEW_GRAPH_DAG,
 };
 
 use crate::document_types::register_document_types;
@@ -33,20 +33,8 @@ pub fn register(host: &mut (impl CommandHost + ViewHost + DocumentTypeHost + Use
         CommandDescriptor::with_label("Toggle playback"),
     );
     host.register_command(
-        CMD_GRAPH_TOOL_SELECT,
-        CommandDescriptor::with_label("Graph select tool"),
-    );
-    host.register_command(
-        CMD_GRAPH_TOOL_ADD,
-        CommandDescriptor::with_label("Graph add tool"),
-    );
-    host.register_command(
-        CMD_GRAPH_TOOL_CONNECT,
-        CommandDescriptor::with_label("Graph connect tool"),
-    );
-    host.register_command(
-        CMD_GRAPH_TOOL_ERASE,
-        CommandDescriptor::with_label("Graph erase tool"),
+        CMD_GRAPH_ADD_NODE,
+        CommandDescriptor::with_label("Add graph node"),
     );
     host.register_command(
         CMD_GRAPH_DELETE_SELECTION,

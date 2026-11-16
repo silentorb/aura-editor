@@ -3,8 +3,8 @@
 use std::path::PathBuf;
 
 use aura_editor::{
-    add_node, graph_to_aura_json, App, Bindings, ConnectionMode, GraphEdit, GraphTool, GraphUiEntry,
-    GraphUiState, Message, CMD_DOCUMENT_NEW_GRAPH, CMD_GRAPH_TOOL_CONNECT, CommandId,
+    App, Bindings, ConnectionMode, GraphChromeMessage, GraphEdit, GraphUiEntry, GraphUiState,
+    Message, CMD_DOCUMENT_NEW_GRAPH, CMD_GRAPH_ADD_NODE, CommandId,
 };
 
 fn fixture(name: &str) -> PathBuf {
@@ -37,26 +37,29 @@ fn open_sine_erase_node_marks_dirty() {
 }
 
 #[test]
-fn add_node_uses_unique_id() {
+fn add_node_command_opens_dialog_and_confirm_inserts() {
     let mut app = test_app();
     let _ = app.update(Message::Command(CommandId::new(CMD_DOCUMENT_NEW_GRAPH)));
     let id = app.documents().active_id().unwrap();
 
-    let _ = app.update(Message::GraphChrome(
-        aura_editor::GraphChromeMessage::SetAddNodeType(String::from("sine")),
-    ));
-    let _ = app.update(Message::Graph {
-        document_id: id,
-        edit: GraphEdit::AddNode,
-    });
-    let _ = app.update(Message::Graph {
-        document_id: id,
-        edit: GraphEdit::AddNode,
-    });
+    let _ = app.update(Message::Command(CommandId::new(CMD_GRAPH_ADD_NODE)));
+    let _ = app.update(Message::GraphChrome(GraphChromeMessage::SetAddNodeType(
+        String::from("sine"),
+    )));
+    let _ = app.update(Message::GraphChrome(GraphChromeMessage::AddNodeConfirm));
+    let _ = app.update(Message::Command(CommandId::new(CMD_GRAPH_ADD_NODE)));
+    let _ = app.update(Message::GraphChrome(GraphChromeMessage::AddNodeConfirm));
 
-    let graph = app.documents().active_document().unwrap().payload.graph().unwrap();
+    let graph = app
+        .documents()
+        .active_document()
+        .unwrap()
+        .payload
+        .graph()
+        .unwrap();
     assert!(graph.nodes.contains_key("sine"));
     assert!(graph.nodes.contains_key("sine_2"));
+    assert_eq!(app.documents().active_id(), Some(id));
 }
 
 #[test]
@@ -73,7 +76,6 @@ fn simple_connect_auto_pairs_ports() {
         },
     });
 
-    let _ = app.update(Message::Command(CommandId::new(CMD_GRAPH_TOOL_CONNECT)));
     let _ = app.update(Message::Graph {
         document_id: id,
         edit: GraphEdit::ConnectNodes {
@@ -82,7 +84,13 @@ fn simple_connect_auto_pairs_ports() {
         },
     });
 
-    let graph = app.documents().active_document().unwrap().payload.graph().unwrap();
+    let graph = app
+        .documents()
+        .active_document()
+        .unwrap()
+        .payload
+        .graph()
+        .unwrap();
     assert!(graph.edges.values().any(|edge| {
         edge.from.node == "freq"
             && edge.from.port == "value"
@@ -92,10 +100,37 @@ fn simple_connect_auto_pairs_ports() {
 }
 
 #[test]
+fn disconnect_port_removes_incident_edges() {
+    let mut app = test_app();
+    let _ = app.update(Message::OpenPath(fixture("sine.json")));
+    let id = app.documents().active_id().unwrap();
+
+    let _ = app.update(Message::Graph {
+        document_id: id,
+        edit: GraphEdit::DisconnectPort {
+            node_id: String::from("freq"),
+            port_id: String::from("value"),
+            is_output: true,
+        },
+    });
+
+    let graph = app
+        .documents()
+        .active_document()
+        .unwrap()
+        .payload
+        .graph()
+        .unwrap();
+    assert!(!graph.edges.values().any(|edge| {
+        edge.from.node == "freq" && edge.from.port == "value"
+    }));
+    assert!(app.documents().active_document().unwrap().dirty);
+}
+
+#[test]
 fn connection_mode_persists_in_entry_shape() {
     let state = GraphUiState {
         connection_mode: ConnectionMode::Precise,
-        tool: GraphTool::Connect,
         add_node_type: String::from("add"),
         selected_node: None,
         selected_edge: None,
@@ -104,17 +139,15 @@ fn connection_mode_persists_in_entry_shape() {
     };
     let entry = state.to_entry();
     assert_eq!(entry.connection_mode, "precise");
-    assert_eq!(entry.active_tool, "connect");
     assert_eq!(entry.add_node_type, "add");
     let restored = GraphUiState::from_entry(&entry, "sine");
     assert_eq!(restored.connection_mode, ConnectionMode::Precise);
-    assert_eq!(restored.tool, GraphTool::Connect);
+    assert_eq!(restored.add_node_type, "add");
 }
 
 #[test]
 fn graph_ui_entry_defaults() {
     let defaults = GraphUiEntry::new("sine");
-    assert_eq!(defaults.active_tool, "select");
     assert_eq!(defaults.connection_mode, "simple");
     assert_eq!(defaults.add_node_type, "sine");
 }
@@ -161,15 +194,4 @@ fn new_graph_save_round_trip() {
         .contains_key("sine"));
 
     let _ = std::fs::remove_dir_all(&dir);
-}
-
-#[test]
-fn graph_to_aura_json_helper_used_by_save() {
-    let mut graph = imp_core_types::Graph {
-        nodes: Default::default(),
-        edges: Default::default(),
-    };
-    add_node(&mut graph, "out", "output").unwrap();
-    let json = graph_to_aura_json(&graph).unwrap();
-    assert!(json.contains("imp-graph"));
 }

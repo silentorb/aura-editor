@@ -44,10 +44,7 @@ pub const CMD_DOCUMENT_NEW_GRAPH: &str = "document.new.graph";
 pub const CMD_PLAY_START: &str = "play.start";
 pub const CMD_PLAY_STOP: &str = "play.stop";
 pub const CMD_PLAY_TOGGLE: &str = "play.toggle";
-pub const CMD_GRAPH_TOOL_SELECT: &str = "graph.tool.select";
-pub const CMD_GRAPH_TOOL_ADD: &str = "graph.tool.add";
-pub const CMD_GRAPH_TOOL_CONNECT: &str = "graph.tool.connect";
-pub const CMD_GRAPH_TOOL_ERASE: &str = "graph.tool.erase";
+pub const CMD_GRAPH_ADD_NODE: &str = "graph.add.node";
 pub const CMD_GRAPH_DELETE_SELECTION: &str = "graph.delete.selection";
 
 /// Notation extension command ids.

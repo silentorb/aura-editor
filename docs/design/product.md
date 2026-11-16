@@ -48,8 +48,8 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Open graphs are drawn on an Iced Canvas using automatic layout only (petgraph-backed layered layout). See [`graph-dag.md`](graph-dag.md).
 - Users may pan and zoom the canvas; they must not freely drag nodes to persist positions.
 - Editing nodes or connections regenerates layout.
-- Modal tools: Select / Add / Connect / Erase on the graph toolbar.
-- Connection UI is toggleable globally: **Simple** (node→node with auto port pairing) or **Precise** (port handles, drag output→input).
+- Graph pointer editing is always-on (select and wire without modal tools). **Add node** is a command that opens a type-picker modal and inserts immediately; Delete/Backspace removes the selection.
+- Connection UI is toggleable globally: **Simple** (drag node→node with auto port pairing) or **Precise** (drag output port→input port, rubber-band preview; right-click a port to disconnect).
 - Graph view options (including connection mode) live in a far-right toolbar dropdown and apply across all graph tabs.
 
 ## Shell chrome
