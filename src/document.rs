@@ -6,9 +6,9 @@
 //! single nullary `external_score` node with Aura-owned embedded notation data.
 
 use std::any::Any;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ops::{Deref, DerefMut};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use aura_ext_notation::Notation;
 use imp_core_types::{Graph, Node, NodeId};
@@ -23,6 +23,48 @@ pub const NOTATION_SCORE_NODE_ID: &str = "score";
 pub const NOTATION_SCORE_NODE_TYPE: &str = "external_score";
 
 pub use imp_documents::DocumentId;
+
+/// How an open document was materialized into app memory.
+///
+/// Filesystem opens and Miro pulls are parallel workflows. Miro tabs dedupe by
+/// `(content_root, record_id)`; filesystem tabs dedupe by path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DocumentOrigin {
+    /// Loaded (or saved) as a filesystem path.
+    Filesystem {
+        /// Absolute or user-supplied path.
+        path: PathBuf,
+    },
+    /// Pulled from a Miro SQLite projection for a content root.
+    Miro {
+        /// Text authoring root for the Miro session.
+        content_root: PathBuf,
+        /// Opaque Mir record id (root-relative path with `/` separators).
+        record_id: String,
+    },
+}
+
+impl DocumentOrigin {
+    /// Filesystem path used for Save / neighbor hints.
+    pub fn authoring_path(&self) -> PathBuf {
+        match self {
+            Self::Filesystem { path } => path.clone(),
+            Self::Miro {
+                content_root,
+                record_id,
+            } => authoring_path_for_record(content_root, record_id),
+        }
+    }
+}
+
+/// Joins a Miro record id onto a content root (`/`-separated id segments).
+pub fn authoring_path_for_record(content_root: &Path, record_id: &str) -> PathBuf {
+    let mut path = content_root.to_path_buf();
+    for segment in record_id.split('/').filter(|s| !s.is_empty()) {
+        path.push(segment);
+    }
+    path
+}
 
 /// Aura-owned structured data attached to a model node (not Imp `PrimitiveValue`).
 #[derive(Debug, Clone)]
@@ -180,6 +222,7 @@ pub type GraphDocument = SessionDocument;
 #[derive(Debug, Clone, Default)]
 pub struct DocumentStore {
     inner: imp_documents::DocumentStore<DocumentPayload>,
+    origins: HashMap<DocumentId, DocumentOrigin>,
 }
 
 impl Deref for DocumentStore {
@@ -202,6 +245,29 @@ impl DocumentStore {
         Self::default()
     }
 
+    /// Origin for an open document, when known (untitled tabs have none).
+    pub fn origin(&self, id: DocumentId) -> Option<&DocumentOrigin> {
+        self.origins.get(&id)
+    }
+
+    /// Closes a tab and drops its origin metadata.
+    pub fn close(&mut self, id: DocumentId) {
+        self.origins.remove(&id);
+        self.inner.close(id);
+    }
+
+    /// Assigns a filesystem path after Save As and records a filesystem origin.
+    pub fn set_path_and_clean(&mut self, id: DocumentId, path: PathBuf) {
+        self.origins
+            .insert(id, DocumentOrigin::Filesystem { path: path.clone() });
+        self.inner.set_path_and_clean(id, path);
+    }
+
+    /// Clears dirty after a successful save without changing Miro origin.
+    pub fn mark_clean(&mut self, id: DocumentId) {
+        self.inner.mark_clean(id);
+    }
+
     /// Opens a stacked document at `path`, or activates an existing tab for the same path.
     ///
     /// Returns the document id that is active afterward, or `None` if the tip payload
@@ -218,12 +284,59 @@ impl DocumentStore {
 
         let tip_type = opened.type_chain.last()?.as_str();
         let payload = DocumentPayload::from_tip(tip_type, opened.payload)?;
-        Some(self.inner.open_or_activate(
-            path,
+        let id = self.inner.open_or_activate(
+            path.clone(),
             opened.type_chain,
             opened.roles,
             payload,
-        ))
+        );
+        self.origins
+            .insert(id, DocumentOrigin::Filesystem { path });
+        Some(id)
+    }
+
+    /// Opens a Miro-pulled stacked document, or activates an existing Miro tab.
+    ///
+    /// Dedupes on `(content_root, record_id)`. Sets the session path to the derived
+    /// authoring path for Save / neighbor hints.
+    pub fn open_or_activate_miro(
+        &mut self,
+        content_root: PathBuf,
+        record_id: String,
+        opened: StackedOpen,
+    ) -> Option<DocumentId> {
+        if let Some(id) = self.find_miro(&content_root, &record_id) {
+            self.select(id);
+            return Some(id);
+        }
+
+        let tip_type = opened.type_chain.last()?.as_str();
+        let payload = DocumentPayload::from_tip(tip_type, opened.payload)?;
+        let authoring = authoring_path_for_record(&content_root, &record_id);
+        let id = self.inner.open_or_activate(
+            authoring,
+            opened.type_chain,
+            opened.roles,
+            payload,
+        );
+        self.origins.insert(
+            id,
+            DocumentOrigin::Miro {
+                content_root,
+                record_id,
+            },
+        );
+        Some(id)
+    }
+
+    fn find_miro(&self, content_root: &Path, record_id: &str) -> Option<DocumentId> {
+        self.origins.iter().find_map(|(id, origin)| match origin {
+            DocumentOrigin::Miro {
+                content_root: root,
+                record_id: rid,
+            } if root == content_root && rid == record_id => Some(*id),
+            _ => None,
+        })
     }
 
     /// Creates an untitled notation tab and activates it.
@@ -377,6 +490,67 @@ mod tests {
         assert_eq!(
             imp_documents::title_for_path(std::path::Path::new("/tmp/demo.json")),
             "demo"
+        );
+    }
+
+    #[test]
+    fn miro_origin_dedupes_by_record_id() {
+        let mut store = DocumentStore::new();
+        let root = PathBuf::from("/content");
+        let opened = StackedOpen {
+            type_chain: vec![
+                aura_interfaces::DOC_TYPE_JSON.to_string(),
+                aura_interfaces::DOC_TYPE_AURA_JSON.to_string(),
+                aura_interfaces::DOC_TYPE_IMP_GRAPH.to_string(),
+            ],
+            roles: vec![
+                Some(aura_interfaces::ROLE_JSON.to_string()),
+                None,
+                Some(aura_interfaces::ROLE_IMP_GRAPH.to_string()),
+            ],
+            payload: Box::new(Graph {
+                nodes: BTreeMap::new(),
+                edges: BTreeMap::new(),
+            }),
+        };
+        let id1 = store
+            .open_or_activate_miro(root.clone(), "a.json".into(), opened)
+            .expect("open");
+        let opened2 = StackedOpen {
+            type_chain: vec![
+                aura_interfaces::DOC_TYPE_JSON.to_string(),
+                aura_interfaces::DOC_TYPE_AURA_JSON.to_string(),
+                aura_interfaces::DOC_TYPE_IMP_GRAPH.to_string(),
+            ],
+            roles: vec![
+                Some(aura_interfaces::ROLE_JSON.to_string()),
+                None,
+                Some(aura_interfaces::ROLE_IMP_GRAPH.to_string()),
+            ],
+            payload: Box::new(Graph {
+                nodes: BTreeMap::new(),
+                edges: BTreeMap::new(),
+            }),
+        };
+        let id2 = store
+            .open_or_activate_miro(root.clone(), "a.json".into(), opened2)
+            .expect("reopen");
+        assert_eq!(id1, id2);
+        assert_eq!(store.documents().len(), 1);
+        assert_eq!(
+            store.origin(id1),
+            Some(&DocumentOrigin::Miro {
+                content_root: root,
+                record_id: "a.json".into(),
+            })
+        );
+    }
+
+    #[test]
+    fn authoring_path_splits_record_segments() {
+        assert_eq!(
+            authoring_path_for_record(Path::new("/root"), "demos/a.json"),
+            PathBuf::from("/root/demos/a.json")
         );
     }
 }

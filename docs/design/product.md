@@ -23,11 +23,12 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Users can open a single-graph Aura JSON Imp file (`type: "imp-graph"` plus `nodes` / `edges`) or a notation document (`type: "notation"`), switch tabs, and close documents.
 - Users may create a new empty notation document or a new empty Imp graph (untitled), edit it, and save it to disk (Save As when untitled).
 - Opening a path that is already open activates that tab (no duplicate).
-- An open document stores its document-type chain, view roles, and a node-backed tip (`ModelGraph` for `imp-graph` and `notation`; generic JSON remains an exception).
+- An open document stores its document-type chain, view roles, a **document origin** (filesystem path or Miro `content_root` + `record_id`), and a node-backed tip (`ModelGraph` for `imp-graph` and `notation`; generic JSON remains an exception).
 - The document content pane resolves a **view** by walking the type chain from tip to root and using the first role with an enabled view (`imp-graph` → builtin `graph-dag`; `notation` → `piano-roll`).
 - Imp graph documents support create, modify, and save in the `graph-dag` view (see [`graph-dag.md`](graph-dag.md)).
 - Notation documents support create, modify, and save in the piano-roll view, which edits the nullary node’s embedded notation (see [`piano-roll.md`](piano-roll.md)).
 - Open document paths and the active tab are restored from ephemeral user state under the Aura user directory (see [`user-state.md`](user-state.md)); untitled tabs and pan/zoom are not.
+- A **parallel Miro pull workflow** can open a content-root session and materialize SQLite projection records into `ModelGraph` tabs (`open_miro_workspace` / `open_miro_record_tab`). File → Open remains filesystem-only until a later slice attaches UI; see [`miro.md`](miro.md).
 - Shell body layout (documents and properties panes) is an Iced `pane_grid`: users may drag panes to rearrange and resize splits; the layout tree is persisted as user state (see [`user-state.md`](user-state.md)). The default arrangement is documents | properties, with Properties on the right of Documents. The active view’s tool strip lives inside the Documents pane (below the tab bar). A fixed status bar at the bottom of the window shows errors and transport feedback.
 - Extensibility (commands, views, document types, and user-state) follows [`extensions.md`](extensions.md).
 

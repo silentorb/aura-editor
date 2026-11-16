@@ -12,6 +12,7 @@ mod graph_catalog;
 mod graph_file;
 mod logging;
 mod menu_bar;
+mod miro;
 mod piano_roll;
 mod piano_roll_ui;
 mod playback;
@@ -21,8 +22,13 @@ mod user_state;
 pub use bindings::{user_bindings_path, Bindings, DEFAULT_BINDINGS_JSON};
 pub use command::CommandId;
 pub use document::{
-    DocumentId, DocumentPayload, DocumentStore, EmbeddedPayload, GraphDocument, ModelGraph,
-    SessionDocument, NOTATION_SCORE_NODE_ID, NOTATION_SCORE_NODE_TYPE,
+    authoring_path_for_record, DocumentId, DocumentOrigin, DocumentPayload, DocumentStore,
+    EmbeddedPayload, GraphDocument, ModelGraph, SessionDocument, NOTATION_SCORE_NODE_ID,
+    NOTATION_SCORE_NODE_TYPE,
+};
+pub use miro::{
+    open_miro_record, open_miro_session, open_miro_session_in_memory, session_content_root,
+    MiroOpenError,
 };
 pub use extensions::{
     register_linked_extensions, ExtensionRuntime, RegistrationHost, StackedOpen, UserStateBinding,
@@ -72,6 +78,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aura_imp::{aura_registry, get_node_type, list_node_types};
+use aura_integration::MiroSession;
 use aura_io_cpal::PlaybackEngine;
 use aura_sample::SampleRate;
 use iced::keyboard::{self, key::Named, Key, Modifiers};
@@ -97,9 +104,10 @@ use crate::playback::{
 pub const TITLE_DEBOUNCE: Duration = Duration::from_millis(500);
 
 /// Root application state for the editor shell.
-#[derive(Debug)]
 pub struct App {
     documents: DocumentStore,
+    /// Optional Miro session (parallel pull workflow; not menu-attached yet).
+    miro: Option<MiroSession>,
     /// Last open/load/save error shown in the status banner.
     last_error: Option<OpenError>,
     /// Non-open status text (playback errors and notices).
@@ -235,6 +243,29 @@ impl Default for App {
     }
 }
 
+impl std::fmt::Debug for App {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("App")
+            .field("documents", &self.documents)
+            .field("miro_open", &self.miro.is_some())
+            .field("last_error", &self.last_error)
+            .field("status_notice", &self.status_notice)
+            .field("bindings", &self.bindings)
+            .field("extensions", &self.extensions)
+            .field("user_state", &self.user_state)
+            .field("piano_roll_ui", &self.piano_roll_ui)
+            .field("graph_ui", &self.graph_ui)
+            .field("add_node_dialog", &self.add_node_dialog)
+            .field("title_commit_generation", &self.title_commit_generation)
+            .field("playheads", &self.playheads)
+            .field("playback_end_secs", &self.playback_end_secs)
+            .field("theme", &self.theme)
+            .field("resolved", &self.resolved)
+            .field("accessibility", &self.accessibility)
+            .finish_non_exhaustive()
+    }
+}
+
 impl App {
     /// Creates the initial application state with bundled extensions and bindings.
     ///
@@ -260,6 +291,7 @@ impl App {
         let (theme, resolved, accessibility) = load_native_theme();
         Self {
             documents: DocumentStore::default(),
+            miro: None,
             last_error: None,
             status_notice: None,
             bindings,
@@ -293,6 +325,7 @@ impl App {
         let (theme, resolved, accessibility) = load_native_theme();
         let mut app = Self {
             documents: DocumentStore::default(),
+            miro: None,
             last_error: None,
             status_notice: None,
             bindings,
@@ -312,6 +345,58 @@ impl App {
         };
         app.restore_open_documents();
         app
+    }
+
+    /// Active Miro session, when one has been opened programmatically.
+    pub fn miro_session(&self) -> Option<&MiroSession> {
+        self.miro.as_ref()
+    }
+
+    /// Opens or replaces the Miro session for `content_root` (host DB under `.aura/`).
+    ///
+    /// Not attached to File menu yet; tests and later UI call this directly.
+    pub fn open_miro_workspace(&mut self, content_root: impl Into<PathBuf>) -> Result<(), MiroOpenError> {
+        let session = open_miro_session(content_root)?;
+        self.miro = Some(session);
+        self.last_error = None;
+        Ok(())
+    }
+
+    /// Opens an in-memory Miro session for `content_root` (tests).
+    pub fn open_miro_workspace_in_memory(
+        &mut self,
+        content_root: impl Into<PathBuf>,
+    ) -> Result<(), MiroOpenError> {
+        let session = open_miro_session_in_memory(content_root)?;
+        self.miro = Some(session);
+        self.last_error = None;
+        Ok(())
+    }
+
+    /// Pulls `record_id` from the active Miro session into a document tab.
+    ///
+    /// Dedupes on Miro origin. Returns the active document id.
+    pub fn open_miro_record_tab(&mut self, record_id: &str) -> Result<DocumentId, MiroOpenError> {
+        let Some(session) = self.miro.as_mut() else {
+            return Err(MiroOpenError::Document(OpenError::Invalid {
+                path: PathBuf::from("miro"),
+                reason: String::from("no Miro session open"),
+            }));
+        };
+        let content_root = session.content_root().to_path_buf();
+        let opened = open_miro_record(&self.extensions, session, record_id)?;
+        let id = self
+            .documents
+            .open_or_activate_miro(content_root, record_id.to_string(), opened)
+            .ok_or_else(|| {
+                MiroOpenError::Document(OpenError::Invalid {
+                    path: PathBuf::from(record_id),
+                    reason: String::from("unsupported tip document payload"),
+                })
+            })?;
+        self.last_error = None;
+        self.piano_roll_ui.selected_note = None;
+        Ok(id)
     }
 
     /// Shell pane-grid state.
@@ -834,7 +919,18 @@ impl App {
             return Task::none();
         }
         self.last_error = None;
-        self.documents.set_path_and_clean(document_id, path);
+        let keep_miro = matches!(
+            self.documents.origin(document_id),
+            Some(DocumentOrigin::Miro { .. })
+        ) && self
+            .documents
+            .origin(document_id)
+            .is_some_and(|origin| origin.authoring_path() == path);
+        if keep_miro {
+            self.documents.mark_clean(document_id);
+        } else {
+            self.documents.set_path_and_clean(document_id, path);
+        }
         self.sync_open_documents_task()
     }
 
