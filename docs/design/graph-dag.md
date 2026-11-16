@@ -5,7 +5,7 @@ Declarative requirements for the Imp `graph-dag` view: visualization, always-on 
 ## Role
 
 - The `graph-dag` view is the primary surface for editing single-graph Imp documents (`imp-graph`).
-- Users create, select, rename, and delete nodes, and create or delete connections, on an automatically laid-out Canvas. Changing an existing node's type is a secondary concern (not a primary Properties action in this slice).
+- Users create, select, retitle, and delete nodes, and create or delete connections, on an automatically laid-out Canvas. Changing an existing node's type is a secondary concern (not a primary Properties action in this slice).
 - Layout remains automatic (petgraph layered). Edits regenerate layout. Freeform node placement is not supported.
 
 ## Implementation crate
@@ -21,8 +21,8 @@ Graph editing does **not** use mutually exclusive modal tools (unlike the piano-
 
 | Action | Behavior |
 |--------|----------|
-| Select | Click a node or edge to select; empty-space drag pans (selection clear on empty click is not required when pan wins). With a node selected, the Properties pane exposes an id field (auto-commits after a brief idle pause, or immediately on Enter) and a read-only type label. Middle-button drag pans; wheel zooms. |
-| Add node | Command `graph.add.node` (toolbar **Add node** button; key `A` when a graph tab is active) opens a modal to choose a node type. Submit inserts a node of that type with a unique id and regenerates layout; Cancel/Escape closes with no edit. Last-used type is remembered in user state. |
+| Select | Click a node or edge to select; empty-space drag pans (selection clear on empty click is not required when pan wins). With a node selected, the Properties pane exposes a title field (auto-commits after a brief idle pause, or immediately on Enter), a read-only id, and a read-only type label. Middle-button drag pans; wheel zooms. |
+| Add node | Command `graph.add.node` (toolbar **Add node** button; key `A` when a graph tab is active) opens a modal to choose a node type. Submit inserts a node of that type with a new ULID id, a unique title derived from the type (`sine`, `sine_2`, …), and regenerates layout; Cancel/Escape closes with no edit. Last-used type is remembered in user state. |
 | Connect | Always-on drag-to-connect per connection mode (below), with a rubber-band preview while dragging. Not a toolbar tool. |
 | Disconnect port | In **Precise** mode, **right-click** a port handle to remove every edge attached to that port. |
 | Delete | **Delete** / **Backspace** removes the current selection (node or edge). There is no Erase tool or click-to-erase. |
@@ -60,7 +60,7 @@ Graph editing does **not** use mutually exclusive modal tools (unlike the piano-
 ## Selection and update
 
 - Selection is session-only (not persisted).
-- **Update** in this slice means rename node id for the selected node in the shell **Properties** pane (not the Documents tool strip): edits apply after a short typing idle (or immediately on Enter); there is no separate Rename button. Type is shown read-only; changing type is deferred to a later secondary flow. A full input-literal property inspector is out of scope.
+- **Update** in this slice means edit the selected node’s title in the shell **Properties** pane (not the Documents tool strip): edits apply after a short typing idle (or immediately on Enter); there is no separate Rename button. Id and type are shown read-only; changing type is deferred to a later secondary flow. A full input-literal property inspector is out of scope.
 
 ## Persistence of documents
 

@@ -26,10 +26,13 @@ mod tests {
             nodes: BTreeMap::new(),
             edges: BTreeMap::new(),
         };
-        add_node(&mut graph, "out", "output").unwrap();
+        let id = ulid::Ulid::new().to_string();
+        add_node(&mut graph, id.clone(), "output", Some("out".into())).unwrap();
         let json = graph_to_aura_json(&graph).unwrap();
         let value: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(value["type"], "imp-graph");
         assert!(value.get("nodes").is_some());
+        assert_eq!(value["nodes"][&id]["title"], "out");
+        assert_eq!(value["nodes"][&id]["id"], id);
     }
 }

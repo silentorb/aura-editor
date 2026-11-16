@@ -39,7 +39,7 @@ pub enum PlaybackPrepareError {
     InvalidTempo(String),
 }
 
-/// Resolves the most-output node on an Imp graph (prefer id `out`).
+/// Resolves the most-output node on an Imp graph (prefer title `out`).
 ///
 /// Mirrors `aura_integration::find_output_node` without sharing the engine's
 /// `imp_core_types` crate instance (editor and engine mount Imp separately).
@@ -48,16 +48,18 @@ pub fn resolve_playback_node(graph: &Graph) -> Result<String, PlaybackPrepareErr
         .nodes
         .values()
         .filter(|node| node.node_type == "output")
-        .map(|node| node.id.clone())
         .collect();
 
-    if outputs.iter().any(|id| id == "out") {
-        return Ok(String::from("out"));
+    if let Some(preferred) = outputs
+        .iter()
+        .find(|node| node.title.as_deref() == Some("out"))
+    {
+        return Ok(preferred.id.clone());
     }
 
     match outputs.as_slice() {
         [] => Err(PlaybackPrepareError::MissingOutput),
-        [id] => Ok(id.clone()),
+        [node] => Ok(node.id.clone()),
         _ => Err(PlaybackPrepareError::MultipleOutputs),
     }
 }
@@ -161,10 +163,10 @@ pub fn prepare_notation_playback(
 
     let graph_json = r#"{
   "nodes": {
-    "score": { "id": "score", "type": "external_score", "inputs": {} },
-    "clock": { "id": "clock", "type": "time", "inputs": {} },
-    "voice": { "id": "voice", "type": "poly_sine_score", "inputs": {} },
-    "out": { "id": "out", "type": "output", "inputs": {} }
+    "score": { "id": "score", "title": "score", "type": "external_score", "inputs": {} },
+    "clock": { "id": "clock", "title": "clock", "type": "time", "inputs": {} },
+    "voice": { "id": "voice", "title": "voice", "type": "poly_sine_score", "inputs": {} },
+    "out": { "id": "out", "title": "out", "type": "output", "inputs": {} }
   },
   "edges": {
     "score_to_voice": {

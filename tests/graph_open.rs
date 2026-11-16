@@ -30,7 +30,10 @@ fn loads_single_graph_fixture() {
         .payload
         .downcast_ref::<Graph>()
         .expect("imp-graph tip");
-    assert!(graph.nodes.contains_key("osc"));
+    assert!(graph
+        .nodes
+        .values()
+        .any(|node| node.title.as_deref() == Some("osc")));
     assert!(graph.edges.contains_key("osc_to_out"));
 }
 

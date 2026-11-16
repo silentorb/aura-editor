@@ -1,57 +1,61 @@
 {
   "type": "imp-graph",
   "nodes": {
-    "time": {
-      "id": "time",
+    "0033AFBGAW03BV387HWA48PA51": {
+      "id": "0033AFBGAW03BV387HWA48PA51",
       "type": "time",
-      "inputs": {}
+      "inputs": {},
+      "title": "time"
     },
-    "freq": {
-      "id": "freq",
+    "0033AFBGAX03C4ZP3BKG3XB95P": {
+      "id": "0033AFBGAX03C4ZP3BKG3XB95P",
       "type": "parameter",
       "inputs": {
         "value": 440.0
-      }
+      },
+      "title": "freq"
     },
-    "osc": {
-      "id": "osc",
+    "0033AFBGAY03CEW3Z5AP3J086B": {
+      "id": "0033AFBGAY03CEW3Z5AP3J086B",
       "type": "sine",
-      "inputs": {}
+      "inputs": {},
+      "title": "osc"
     },
-    "out": {
-      "id": "out",
+    "0033AFBGAZ03CRRHTZ1W36N770": {
+      "id": "0033AFBGAZ03CRRHTZ1W36N770",
       "type": "output",
-      "inputs": {}
+      "inputs": {},
+      "title": "out"
     }
   },
   "edges": {
     "freq_to_osc": {
       "from": {
-        "node": "freq",
+        "node": "0033AFBGAX03C4ZP3BKG3XB95P",
         "port": "value"
       },
       "to": {
-        "node": "osc",
+        "node": "0033AFBGAY03CEW3Z5AP3J086B",
         "port": "frequency"
       }
     },
     "time_to_osc": {
       "from": {
-        "node": "time",
+        "node": "0033AFBGAW03BV387HWA48PA51",
         "port": "time"
       },
       "to": {
-        "node": "osc",
+        "node": "0033AFBGAY03CEW3Z5AP3J086B",
         "port": "time"
       }
     },
     "osc_to_out": {
       "from": {
-        "node": "osc",
+        "node": "0033AFBGAY03CEW3Z5AP3J086B",
         "port": "audio"
       },
       "to": {
-        "node": "out",
+        "node": "0033AFBGAZ03CRRHTZ1W36N770",
         "port": "value"
       }
     }

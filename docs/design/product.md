@@ -59,14 +59,14 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Play menu exposes transport commands (Start, Stop). Toggle playback is available as a command (default Space) and need not appear in the menu.
 - Below the menu, the shell body is two named panes in an Iced `pane_grid`: **documents** and **properties**. Panes have title bars for drag rearrange; they are not closable or hideable in this slice. Split ratios are user-resizable.
 - The **documents** pane hosts the tab bar, the active view’s tool strip (graph or piano-roll when applicable, otherwise empty), and the document content. Menus in this slice are not contextual to the active view.
-- The **properties** pane shows a graph node Id editor (auto-commit after idle / Enter) and a read-only Type label when a graph node is selected; otherwise an empty-state message. Full input-literal inspection and in-pane type changes remain out of scope (see [`graph-dag.md`](graph-dag.md)).
+- The **properties** pane shows a graph node Title editor (auto-commit after idle / Enter), a read-only Id, and a read-only Type label when a graph node is selected; otherwise an empty-state message. Full input-literal inspection and in-pane type changes remain out of scope (see [`graph-dag.md`](graph-dag.md)).
 - A fixed **status bar** below the pane grid shows the global status line (errors, graph-edit notices, playback state). It is not a rearrangeable pane and is not part of the persisted shell-layout tree.
 - A global application toolbar, further tool panes, floating windows, closable docks, and per-view contextual menus are deferred.
 
 ## Playback
 
 - **Start** / **Stop** / **Toggle** (`play.start`, `play.stop`, `play.toggle`) stream audio through CPAL (`PlaybackEngine`).
-- **Imp graph tab:** translate the in-memory session graph (`translate` → sampler), starting at `t = 0`. The playable sink is that graph’s most-output node (prefer id `out`, else the sole `output` node). Saving is not required to play. Neighboring graph libraries may be discovered from the document path as a hint.
+- **Imp graph tab:** translate the in-memory session graph (`translate` → sampler), starting at `t = 0`. The playable sink is that graph’s most-output node (prefer title `out`, else the sole `output` node). Saving is not required to play. Neighboring graph libraries may be discovered from the document path as a hint.
 - **Notation / piano-roll tab:** map the open document to an engine `Score` (same type procedural generators emit), bind it through Imp `external_score` → `poly_sine_score`, and start at the parked playhead time (`start_at`). A ruler on the piano roll parks the playhead; while playing the line advances and snaps back on stop or end-of-score.
 - Missing audio devices (common under WSL) surface a status error; the app must not panic.
 

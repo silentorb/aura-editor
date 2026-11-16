@@ -72,20 +72,38 @@ fn properties_pane_shows_node_editors_when_selected() {
     );
     drop(ui);
 
+    let freq_id = app
+        .documents()
+        .active_document()
+        .unwrap()
+        .payload
+        .graph()
+        .unwrap()
+        .nodes
+        .values()
+        .find(|node| node.title.as_deref() == Some("freq"))
+        .map(|node| node.id.clone())
+        .expect("freq node");
     let _ = app.update(Message::Graph {
         document_id: id,
         edit: GraphEdit::SelectNode {
-            node_id: Some(String::from("freq")),
+            node_id: Some(freq_id.clone()),
         },
     });
     assert_eq!(
         app.graph_ui().selected_node.as_deref(),
-        Some("freq")
+        Some(freq_id.as_str())
     );
+    assert_eq!(app.graph_ui().title_buffer, "freq");
 
     let mut ui = simulator(app.view());
     assert!(ui.find("Node: freq").is_ok());
+    assert!(ui.find("Title:").is_ok(), "Properties should show Title label");
     assert!(ui.find("Id:").is_ok(), "Properties should show Id label");
+    assert!(
+        ui.find(freq_id.clone()).is_ok(),
+        "Properties should show the read-only node id"
+    );
     assert!(
         ui.find("Rename").is_err(),
         "Properties must not show a Rename button"

@@ -57,6 +57,7 @@ impl ModelGraph {
             node_id.clone(),
             Node {
                 id: node_id.clone(),
+                title: None,
                 node_type: NOTATION_SCORE_NODE_TYPE.to_string(),
                 type_args: Vec::new(),
                 inputs: BTreeMap::new(),
@@ -340,6 +341,7 @@ mod tests {
             "time".to_string(),
             Node {
                 id: "time".to_string(),
+                title: None,
                 node_type: "time".to_string(),
                 type_args: Vec::new(),
                 inputs: BTreeMap::new(),
