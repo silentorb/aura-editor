@@ -67,8 +67,8 @@ fn properties_pane_shows_node_editors_when_selected() {
         "empty properties state before selection"
     );
     assert!(
-        ui.find("Id:").is_err(),
-        "Id editor should not appear without a selected node"
+        ui.find("Id").is_err(),
+        "Id label should not appear without a selected node"
     );
     drop(ui);
 
@@ -97,9 +97,12 @@ fn properties_pane_shows_node_editors_when_selected() {
     assert_eq!(app.graph_ui().title_buffer, "freq");
 
     let mut ui = simulator(app.view());
-    assert!(ui.find("Node: freq").is_ok());
-    assert!(ui.find("Title:").is_ok(), "Properties should show Title label");
-    assert!(ui.find("Id:").is_ok(), "Properties should show Id label");
+    assert!(
+        ui.find("Node: freq").is_err(),
+        "Properties must not show a redundant Node header"
+    );
+    assert!(ui.find("Title").is_ok(), "Properties should show Title label");
+    assert!(ui.find("Id").is_ok(), "Properties should show Id label");
     assert!(
         ui.find(freq_id.clone()).is_ok(),
         "Properties should show the read-only node id"
@@ -108,7 +111,7 @@ fn properties_pane_shows_node_editors_when_selected() {
         ui.find("Rename").is_err(),
         "Properties must not show a Rename button"
     );
-    assert!(ui.find("Type:").is_ok(), "Properties should show Type label");
+    assert!(ui.find("Type").is_ok(), "Properties should show Type label");
     assert!(
         ui.find("parameter").is_ok(),
         "Properties should show the selected node type as text"

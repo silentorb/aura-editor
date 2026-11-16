@@ -59,7 +59,7 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Play menu exposes transport commands (Start, Stop). Toggle playback is available as a command (default Space) and need not appear in the menu.
 - Below the menu, the shell body is two named panes in an Iced `pane_grid`: **documents** and **properties**. Panes have title bars for drag rearrange; they are not closable or hideable in this slice. Split ratios are user-resizable.
 - The **documents** pane hosts the tab bar, the active view’s tool strip (graph or piano-roll when applicable, otherwise empty), and the document content. Menus in this slice are not contextual to the active view.
-- The **properties** pane shows a graph node Title editor (auto-commit after idle / Enter), a read-only Id, and a read-only Type label when a graph node is selected; otherwise an empty-state message. Full input-literal inspection and in-pane type changes remain out of scope (see [`graph-dag.md`](graph-dag.md)).
+- The **properties** pane shows a graph node’s Title, Id, and Type in a two-column properties view (editable Title with auto-commit after idle / Enter; read-only Id and Type) when a graph node is selected; otherwise an empty-state message. Full input-literal inspection and in-pane type changes remain out of scope (see [`graph-dag.md`](graph-dag.md)).
 - A fixed **status bar** below the pane grid shows the global status line (errors, graph-edit notices, playback state). It is not a rearrangeable pane and is not part of the persisted shell-layout tree.
 - A global application toolbar, further tool panes, floating windows, closable docks, and per-view contextual menus are deferred.
 
