@@ -131,7 +131,7 @@ fn open_miro_node_id_message_opens_tab() {
 }
 
 #[test]
-fn open_hydrates_notation_tip_edge_into_external_score() {
+fn open_indexes_notation_tip_edge_as_remote_without_proxy() {
     let root = temp_content_root();
     fs::copy(fixture("notation.json"), root.join("arp.json")).expect("copy notation");
     let graph_json = format!(
@@ -159,11 +159,12 @@ fn open_hydrates_notation_tip_edge_into_external_score() {
         .open_or_activate_stacked(root.join("parent.json"), opened)
         .expect("activate");
     let graph = store.get(id).expect("doc").payload.graph().expect("graph");
-    let tip = graph
-        .nodes
-        .get(NOTATION_TIP_ID)
-        .expect("notation tip hydrated");
-    assert_eq!(tip.node_type, "external_score");
+    assert!(!graph.nodes.contains_key(NOTATION_TIP_ID));
+    let registry = aura_imp::aura_registry().expect("registry");
+    let remotes = aura_editor::indexed_remote_nodes(graph, &root, &registry).expect("index");
+    let remote = remotes.get(NOTATION_TIP_ID).expect("remote notation tip");
+    assert_eq!(remote.display.node_type, aura_editor::NOTATION_SCORE_NODE_TYPE);
+    assert!(remote.ports.outputs.iter().any(|p| p == "score"));
     assert!(!store.get(id).expect("doc").dirty);
     let _ = fs::remove_dir_all(&root);
 }

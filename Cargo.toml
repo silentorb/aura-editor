@@ -46,6 +46,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 ulid = "1"
 
 [dev-dependencies]
+aura_imp = { path = "../aura-engine/crates/aura_imp" }
 iced_test = "0.14"
 
 # Keep workspace crates debuggable with line tables; omit dependency debuginfo so

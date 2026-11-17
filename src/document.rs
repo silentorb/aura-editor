@@ -3,7 +3,8 @@
 //! Session tab/path/dirty bookkeeping lives in Imp Lab’s [`imp_documents`].
 //! On-disk Aura JSON formats are unchanged. In memory, editable tips are always a
 //! [`ModelGraph`]: Imp graphs load as their nodes/edges; notation documents load as a
-//! single nullary `external_score` node with Aura-owned embedded notation data.
+//! one-node session model with Aura-owned embedded notation (host tip marker, not an
+//! Imp catalog type).
 
 use std::any::Any;
 use std::collections::{BTreeMap, HashMap};
@@ -11,23 +12,11 @@ use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 
 use aura_ext_notation::Notation;
-use aura_integration::authoring_path_for_mir_record;
+use aura_integration::{authoring_path_for_mir_record, NOTATION_TIP_NODE_TYPE};
 use imp_core_types::{Graph, Node, NodeId};
 use serde_json::Value;
 
 use crate::extensions::StackedOpen;
-use crate::miro::hydrate_notation_tip_refs;
-
-/// Hydrate notation tip edge refs into the local map when opening an Imp graph tip.
-fn hydrate_opened_graph(payload: &mut DocumentPayload, content_root: &Path) {
-    let Some(model) = payload.model_mut() else {
-        return;
-    };
-    if model.is_notation_document() {
-        return;
-    }
-    let _ = hydrate_notation_tip_refs(&mut model.graph, content_root);
-}
 
 /// Legacy placeholder NodeId for untitled / pre-tip-id notation documents.
 ///
@@ -35,8 +24,8 @@ fn hydrate_opened_graph(payload: &mut DocumentPayload, content_root: &Path) {
 /// product open key.
 pub const NOTATION_SCORE_NODE_ID: &str = "score";
 
-/// Imp node type for notation-document nullary literals (host-provided score).
-pub const NOTATION_SCORE_NODE_TYPE: &str = "external_score";
+/// Session marker type for notation-document tips (not an Imp product catalog type).
+pub const NOTATION_SCORE_NODE_TYPE: &str = NOTATION_TIP_NODE_TYPE;
 
 pub use imp_documents::DocumentId;
 
@@ -297,10 +286,7 @@ impl DocumentStore {
         }
 
         let tip_type = opened.type_chain.last()?.as_str();
-        let mut payload = DocumentPayload::from_tip(tip_type, opened.payload)?;
-        if let Some(parent) = path.parent() {
-            hydrate_opened_graph(&mut payload, parent);
-        }
+        let payload = DocumentPayload::from_tip(tip_type, opened.payload)?;
         let id = self.inner.open_or_activate(
             path.clone(),
             opened.type_chain,
@@ -329,8 +315,7 @@ impl DocumentStore {
         }
 
         let tip_type = opened.type_chain.last()?.as_str();
-        let mut payload = DocumentPayload::from_tip(tip_type, opened.payload)?;
-        hydrate_opened_graph(&mut payload, &content_root);
+        let payload = DocumentPayload::from_tip(tip_type, opened.payload)?;
         let authoring = authoring_path_for_mir_record(&content_root, &mir_record_id);
         let id = self.inner.open_or_activate(
             authoring,
@@ -449,7 +434,7 @@ mod tests {
     use aura_ext_notation::NotationNote;
 
     #[test]
-    fn notation_tip_wraps_as_nullary_external_score_node() {
+    fn notation_tip_wraps_as_session_marker_node() {
         let mut notation = Notation::empty();
         notation.events.push(NotationNote {
             semitone: 60,

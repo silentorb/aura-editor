@@ -9,7 +9,7 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 - Users can hand-craft data and configuration; that capability must not displace Aura’s procedural, declarative model as the product’s center.
 - **Imp graphs** are the primary persistent resources users open and work with (not traditional DAW project bundles).
 - Hand-crafted **notation** (`notation` Aura JSON) is a second on-disk document kind: plain-text beat-grid note events stored as separate files, complementary to procedural graphs. See [`piano-roll.md`](piano-roll.md).
-- **Documents are storage/UI envelopes.** On open, editable tips become an in-memory node graph (`ModelGraph`). An `imp-graph` file loads as its Imp nodes/edges; a `notation` file loads as a single nullary `external_score` node with Aura-embedded notation data (a complex primitive that outputs a static `score`). On-disk JSON shapes are unchanged; save projects the model back to the tip’s file format.
+- **Documents are storage/UI envelopes.** On open, editable tips become an in-memory node graph (`ModelGraph`). An `imp-graph` file loads as its Imp nodes/edges; a `notation` file loads as a one-node session model with Aura-embedded notation (host tip marker, not an Imp catalog type). On-disk JSON shapes are unchanged; save projects the model back to the tip’s file format.
 
 ## Application stack
 
@@ -42,7 +42,7 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 ## Notation score files
 
 - Supported notation format: Aura JSON with `type: "notation"` and versioned tempo, time signature, and note events (see [`piano-roll.md`](piano-roll.md)).
-- New File creates an empty notation tip in memory (nullary `external_score` node + empty embedded notation); Save writes `type: "notation"` Aura JSON from the embedded payload; Open wraps an existing notation file the same way and shows the piano-roll view.
+- New File creates an empty notation tip in memory (session tip node + empty embedded notation); Save writes `type: "notation"` Aura JSON from the embedded payload; Open wraps an existing notation file the same way and shows the piano-roll view.
 
 ## Graph visualization and editing
 
@@ -68,7 +68,7 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 
 - **Start** / **Stop** / **Toggle** (`play.start`, `play.stop`, `play.toggle`) stream audio through CPAL (`PlaybackEngine`).
 - **Imp graph tab:** translate the in-memory session graph (`translate` → sampler), starting at `t = 0`. The playable sink is that graph’s most-output node (prefer title `out`, else the sole `output` node). Saving is not required to play. Neighboring graph libraries may be discovered from the document path as a hint.
-- **Notation / piano-roll tab:** map the open document to an engine `Score` (same type procedural generators emit), bind it through Imp `external_score` → `poly_sine_score`, and start at the parked playhead time (`start_at`). A ruler on the piano roll parks the playhead; while playing the line advances and snaps back on stop or end-of-score.
+- **Notation / piano-roll tab:** map the open document to an engine `Score` (same type procedural generators emit), audition via a direct score→sampler helper, and start at the parked playhead time (`start_at`). A ruler on the piano roll parks the playhead; while playing the line advances and snaps back on stop or end-of-score.
 - Missing audio devices (common under WSL) surface a status error; the app must not panic.
 
 ## Input bindings

@@ -4,20 +4,30 @@
 //! resolve, tests) use [`open_miro_node`] to resolve a NodeId through the Aura host
 //! index, pull the Mir blob, and materialize it into [`crate::ModelGraph`].
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use std::collections::BTreeSet;
-
+use aura_imp::Registry;
 use aura_integration::{
     authoring_path_for_mir_record, build_miro_node_index, open_aura_miro_session_for_root,
-    open_aura_miro_session_in_memory, pull_by_node_id, AuraMiroError, EXTERNAL_SCORE_NODE_TYPE,
-    MiroNodeIndex, MiroNodeRef, MiroSession,
+    open_aura_miro_session_in_memory, pull_by_node_id, AuraMiroError, MiroContentResolver,
+    MiroNodeIndex, MiroNodeRef, MiroSession, NodeResolver,
 };
 use aura_interfaces::DocumentOpenError;
-use imp_core_types::{Graph, Node};
+use imp_core_types::{Graph, NodeId};
+use imp_graph_editor::{CatalogPort, NodePortInfo, RemoteNodeDisplay, RemoteNodeMap};
 use thiserror::Error;
 
 use crate::extensions::{ExtensionRuntime, StackedOpen};
+
+/// Host-resolved remote card: display fields plus port templates for the canvas.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IndexedRemote {
+    /// Title / type for the card (same presentation as a local node).
+    pub display: RemoteNodeDisplay,
+    /// Port catalog entry derived from the host-resolved definition.
+    pub ports: NodePortInfo,
+}
 
 /// Errors from opening a Miro session or pulling a node into the document stack.
 #[derive(Debug, Error)]
@@ -107,47 +117,72 @@ pub fn session_content_root(session: &MiroSession) -> &Path {
     session.content_root()
 }
 
-/// Insert nullary `external_score` proxies for edge-referenced notation tip NodeIds.
+/// Edge-referenced NodeIds absent from the local map but present in the Miro index.
 ///
-/// Scans `content_root` with the host Miro index (no session required). Endpoints that
-/// already exist in `graph.nodes`, or that index as non-`notation` tips, are left alone
-/// so red missing cards still apply to true unknowns. Does not mark documents dirty —
-/// callers use this at open time to match headless translate hydration.
-pub fn hydrate_notation_tip_refs(
-    graph: &mut Graph,
+/// Resolves title, type, and ports via [`MiroContentResolver`] so remote cards look
+/// like local ones without inserting Imp proxy nodes. Index hits that fail tip
+/// resolve still appear as remotes (non-red) with empty display/ports.
+pub fn indexed_remote_nodes(
+    graph: &Graph,
     content_root: impl AsRef<Path>,
-) -> Result<usize, AuraMiroError> {
+    registry: &Registry,
+) -> Result<BTreeMap<NodeId, IndexedRemote>, AuraMiroError> {
+    let content_root = content_root.as_ref();
     let index = build_miro_node_index(content_root)?;
-    let mut candidates = BTreeSet::new();
+    let resolver = MiroContentResolver {
+        content_root,
+        index: &index,
+        registry,
+    };
+    let mut remotes = BTreeMap::new();
     for edge in graph.edges.values() {
-        candidates.insert(edge.from.node.clone());
-        candidates.insert(edge.to.node.clone());
+        for node_id in [&edge.from.node, &edge.to.node] {
+            if graph.nodes.contains_key(node_id) || remotes.contains_key(node_id) {
+                continue;
+            }
+            if index.get(node_id).is_none() {
+                continue;
+            }
+            let remote = match resolver.resolve_endpoint(node_id) {
+                Some(endpoint) => IndexedRemote {
+                    display: RemoteNodeDisplay {
+                        title: endpoint.node.title,
+                        node_type: endpoint.node.node_type,
+                    },
+                    ports: NodePortInfo {
+                        inputs: endpoint
+                            .definition
+                            .inputs
+                            .values()
+                            .map(|port| CatalogPort {
+                                id: port.id.clone(),
+                                signal_key: serde_json::to_string(&port.signal_type)
+                                    .unwrap_or_default(),
+                                variadic: port.variadic,
+                            })
+                            .collect(),
+                        outputs: endpoint.definition.outputs.keys().cloned().collect(),
+                    },
+                },
+                None => IndexedRemote {
+                    display: RemoteNodeDisplay::default(),
+                    ports: NodePortInfo::default(),
+                },
+            };
+            remotes.insert(node_id.clone(), remote);
+        }
     }
+    Ok(remotes)
+}
 
-    let mut inserted = 0;
-    for node_id in candidates {
-        if graph.nodes.contains_key(&node_id) {
-            continue;
-        }
-        let Some(node_ref) = index.get(&node_id) else {
-            continue;
-        };
-        if node_ref.kind != "notation" {
-            continue;
-        }
-        graph.nodes.insert(
-            node_id.clone(),
-            Node {
-                id: node_id,
-                title: None,
-                node_type: EXTERNAL_SCORE_NODE_TYPE.to_string(),
-                type_args: Vec::new(),
-                inputs: Default::default(),
-            },
-        );
-        inserted += 1;
-    }
-    Ok(inserted)
+/// Display map only (keys = remote-ok NodeIds).
+pub fn indexed_remote_display(
+    remotes: &BTreeMap<NodeId, IndexedRemote>,
+) -> RemoteNodeMap {
+    remotes
+        .iter()
+        .map(|(id, remote)| (id.clone(), remote.display.clone()))
+        .collect()
 }
 
 #[cfg(test)]

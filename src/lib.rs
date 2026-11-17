@@ -26,8 +26,9 @@ pub use document::{
     ModelGraph, SessionDocument, NOTATION_SCORE_NODE_ID, NOTATION_SCORE_NODE_TYPE,
 };
 pub use miro::{
-    hydrate_notation_tip_refs, miro_node_index, open_miro_node, open_miro_session,
-    open_miro_session_in_memory, session_content_root, MiroNodeOpen, MiroOpenError,
+    indexed_remote_display, indexed_remote_nodes, miro_node_index, open_miro_node,
+    open_miro_session, open_miro_session_in_memory, session_content_root, IndexedRemote,
+    MiroNodeOpen, MiroOpenError,
 };
 pub use aura_integration::authoring_path_for_mir_record;
 pub use extensions::{
@@ -38,12 +39,12 @@ pub use aura_graph_json::graph_to_aura_json;
 pub use graph_file::OpenError;
 pub use imp_graph_editor::{
     add_edge, add_node, add_node_type_dialog, auto_pair_ports, center_translation, clamp_scale,
-    erase_node_or_dangling, graph_canvas, layout_graph, node_properties_editor, pan_by,
+    erase_node_or_dangling, graph_canvas_with_remotes, layout_graph, node_properties_editor, pan_by,
     precise_ports_checkbox, remove_edge, remove_edges_at_port, remove_edges_between, remove_node,
     reorder_variadic_inputs, set_node_title, set_node_type, unique_node_title, zoom_at_point,
     CatalogPort, ConnectDraft, ConnectionMode, GraphChromeMessage, GraphEdit, GraphEditError,
     GraphLayout, GraphUiEntry, GraphUiState, GraphView, LaidOutNode, NodePortInfo, NodeTypeCatalog,
-    PortCatalog,
+    PortCatalog, RemoteNodeDisplay, RemoteNodeMap,
 };
 pub use logging::init_logging;
 pub use piano_roll_ui::{PianoRollUiEntry, PianoRollUiState};
@@ -73,7 +74,7 @@ pub use aura_interfaces::{
 };
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -1670,7 +1671,7 @@ impl App {
             }
         };
 
-        if !already_local {
+        if !already_local && kind == "imp-graph" {
             let resolved = {
                 let Some(session) = self.miro.as_ref() else {
                     return Task::none();
@@ -2032,10 +2033,29 @@ impl App {
             match self.extensions.resolve_view_for_chain(&doc.roles) {
                 Some((role, VIEW_GRAPH_DAG)) => match doc.payload.graph() {
                     Some(graph) => {
-                        let ports = build_port_catalog(graph, doc.path.as_deref());
+                        let content_root = self
+                            .miro
+                            .as_ref()
+                            .map(|session| session.content_root().to_path_buf())
+                            .or_else(|| doc.path.as_ref().and_then(|p| p.parent().map(Path::to_path_buf)));
+                        let remotes = content_root
+                            .as_ref()
+                            .and_then(|root| {
+                                let registry = node_type_registry(Some(root)).ok()?;
+                                indexed_remote_nodes(graph, root, &registry).ok()
+                            })
+                            .unwrap_or_default();
+                        let remote_display = indexed_remote_display(&remotes);
+                        let ports = build_port_catalog(graph, doc.path.as_deref(), &remotes);
                         let document_id = doc.id;
-                        graph_canvas(document_id.get(), graph, &self.graph_ui, ports)
-                            .map(move |edit| Message::Graph { document_id, edit })
+                        graph_canvas_with_remotes(
+                            document_id.get(),
+                            graph,
+                            &self.graph_ui,
+                            ports,
+                            &remote_display,
+                        )
+                        .map(move |edit| Message::Graph { document_id, edit })
                     }
                     None => view_error_placeholder(
                         format!(
@@ -2231,6 +2251,7 @@ fn available_node_types(neighbor_hint: Option<&std::path::Path>) -> Vec<String> 
 fn build_port_catalog(
     graph: &imp_core_types::Graph,
     neighbor_hint: Option<&std::path::Path>,
+    remotes: &std::collections::BTreeMap<imp_core_types::NodeId, IndexedRemote>,
 ) -> PortCatalog {
     let mut catalog = PortCatalog::new();
     let Ok(registry) = node_type_registry(neighbor_hint) else {
@@ -2251,6 +2272,11 @@ fn build_port_catalog(
             info.outputs = def.outputs.keys().cloned().collect();
         }
         catalog.insert(node.id.clone(), info);
+    }
+    for (remote_id, remote) in remotes {
+        catalog
+            .entry(remote_id.clone())
+            .or_insert_with(|| remote.ports.clone());
     }
     catalog
 }

@@ -5,18 +5,15 @@ use std::path::Path;
 
 use aura_ext_notation::Notation;
 use aura_imp::{
-    aura_registry, graph_from_json_str, discover_graph_libraries, aura_registry_with_libraries,
-    GraphJsonError, NodeId, Registry, RegistryError,
+    aura_registry_with_libraries, discover_graph_libraries, graph_from_json_str, GraphJsonError,
+    Registry, RegistryError,
 };
 use aura_integration::{
-    translate_graph_to_sampler_with_bindings, translate_graph_to_sampler_with_options,
-    TranslateOptions,
+    sampler_from_score, translate_graph_to_sampler_with_options, TranslateOptions,
 };
 use aura_render::Sampler;
 use aura_sample::SampleRate;
-use aura_sequencing::{
-    beats_to_seconds, NoteEvent, Score, ScoreSignal, Semitone, Tempo, TimeSignature,
-};
+use aura_sequencing::{beats_to_seconds, NoteEvent, Score, Semitone, Tempo, TimeSignature};
 use imp_core_types::Graph;
 use thiserror::Error;
 
@@ -148,51 +145,17 @@ pub fn secs_to_beats(notation: &Notation, secs: f64) -> Result<f64, PlaybackPrep
     Ok(secs / spb)
 }
 
-/// Builds a bound Imp audition graph: `external_score` → `poly_sine_score` → `out`.
+/// Builds a poly-sine sampler from notation (no Imp proxy type).
 ///
-/// The editor models an open notation document as a nullary `external_score` node with
-/// Aura-embedded [`Notation`] data; callers pass that embedded payload here. On-disk
-/// `type: "notation"` files are unchanged and are only projected at open/save.
+/// Callers pass the open tip's embedded [`Notation`]. On-disk `type: "notation"`
+/// files are unchanged and are only projected at open/save.
 pub fn prepare_notation_playback(
     notation: &Notation,
     sample_rate: SampleRate,
 ) -> Result<(Box<dyn Sampler>, f64), PlaybackPrepareError> {
     let score = notation_to_score(notation)?;
     let duration_secs = score.duration_secs().max(0.0);
-    let signal = ScoreSignal::finite(score);
-
-    let graph_json = r#"{
-  "nodes": {
-    "score": { "id": "score", "title": "score", "type": "external_score", "inputs": {} },
-    "clock": { "id": "clock", "title": "clock", "type": "time", "inputs": {} },
-    "voice": { "id": "voice", "title": "voice", "type": "poly_sine_score", "inputs": {} },
-    "out": { "id": "out", "title": "out", "type": "output", "inputs": {} }
-  },
-  "edges": {
-    "score_to_voice": {
-      "from": { "node": "score", "port": "score" },
-      "to": { "node": "voice", "port": "score" }
-    },
-    "time_to_voice": {
-      "from": { "node": "clock", "port": "time" },
-      "to": { "node": "voice", "port": "time" }
-    },
-    "voice_to_out": {
-      "from": { "node": "voice", "port": "audio" },
-      "to": { "node": "out", "port": "value" }
-    }
-  }
-}"#;
-
-    let engine_graph =
-        graph_from_json_str(graph_json).map_err(PlaybackPrepareError::Serialize)?;
-    let registry = aura_registry()?;
-    let bindings: BTreeMap<NodeId, ScoreSignal> =
-        BTreeMap::from([(String::from("score"), signal)]);
-    let sampler =
-        translate_graph_to_sampler_with_bindings(&engine_graph, &registry, sample_rate, &bindings)
-            .map_err(|error| PlaybackPrepareError::Translate(error.to_string()))?;
-    Ok((sampler, duration_secs))
+    Ok((sampler_from_score(score, sample_rate), duration_secs))
 }
 
 #[cfg(test)]

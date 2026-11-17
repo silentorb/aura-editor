@@ -53,5 +53,5 @@ Refined requirements: [`../design/input-bindings.md`](../design/input-bindings.m
 
 ## Resolved
 
-- Notation tips are first-class `score` sources inside Imp graphs via tip NodeId + nullary `external_score` (Miro host index / headless content-root resolve). Opening a notation tip in the editor wraps the same identity as an embedded-score node for the piano roll.
+- Notation tips are first-class `score` sources inside Imp graphs via tip NodeId + Miro host resolve (no Imp proxy type). Opening a notation tip in the editor uses the same tip id for the piano-roll document.
 - Editor Play from a notation tab uses the embedded notation payload (not a sibling-path resolve of the open tab).
