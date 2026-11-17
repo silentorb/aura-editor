@@ -24,7 +24,7 @@ Declarative requirements for the editor’s Miro app-memory path. Product shell:
 
 - Pull is host index resolve → `poll_watch` → `pull_record(mir_record_id)` → `open_document_bytes` → `ModelGraph` (same stack as filesystem bytes).
 - Imp graphs keep edge topology when endpoints lack a local `Graph.nodes` entry; missing cards / typecheck errors behave as for any incomplete graph ([`graph-dag.md`](graph-dag.md)).
-- On open (filesystem or Miro), edge-referenced NodeIds that the content-root Miro index can resolve **must** be treated as host remotes (not red missing cards) without inserting Imp proxy nodes into the local map. Remote cards present host-resolved title and type like local cards.
+- On open (filesystem or Miro), edge-referenced NodeIds that the content-root Miro index can resolve **must** be treated as host remotes (not red missing cards) without inserting Imp proxy nodes into the local map. Remote cards and Properties present host-resolved title and type like local cards (notation remotes use document optional `title` and type `notation`).
 - Double-click **OpenNode** on a missing/remote card **must** resolve via Miro: copy an `imp-graph` node into the active local map, or open/focus a notation tip tab without inserting a fake Imp node.
 
 ## Non-goals (this slice)

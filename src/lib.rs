@@ -30,7 +30,7 @@ pub use host::{
     open_session, open_session_in_memory, session_content_root, IndexedRemote,
     PulledNodeOpen, HostOpenError,
 };
-pub use aura_integration::authoring_path_for_mir_record;
+pub use aura_integration::{authoring_path_for_mir_record, NOTATION_NODE_TYPE};
 pub use extensions::{
     register_linked_extensions, ExtensionRuntime, RegistrationHost, StackedOpen, UserStateBinding,
     DEFAULT_EXTENSIONS_JSON,
@@ -486,6 +486,34 @@ impl App {
             .active_document()
             .and_then(|doc| doc.payload.graph())
             .is_some()
+    }
+
+    fn content_root_for_doc(&self, doc: &SessionDocument) -> Option<PathBuf> {
+        self.session
+            .as_ref()
+            .map(|session| session.content_root().to_path_buf())
+            .or_else(|| {
+                doc.path
+                    .as_ref()
+                    .and_then(|path| path.parent().map(Path::to_path_buf))
+            })
+    }
+
+    /// Host-resolved display for an absent-local NodeId, when the content root indexes it.
+    fn remote_node_display(
+        &self,
+        document_id: DocumentId,
+        node_id: &str,
+    ) -> Option<RemoteNodeDisplay> {
+        let doc = self.documents.get(document_id)?;
+        let graph = doc.payload.graph()?;
+        if graph.nodes.contains_key(node_id) {
+            return None;
+        }
+        let root = self.content_root_for_doc(doc)?;
+        let registry = node_type_registry(Some(root.as_path())).ok()?;
+        let remotes = indexed_remote_nodes(graph, &root, &registry).ok()?;
+        remotes.get(node_id).map(|remote| remote.display.clone())
     }
 
     /// Whether the CPAL playback engine currently holds a running stream.
@@ -1162,12 +1190,17 @@ impl App {
                 self.invalidate_pending_title_commit();
                 let title = node_id
                     .as_ref()
-                    .and_then(|id| {
+                    .map(|id| {
                         self.documents
                             .get(document_id)
                             .and_then(|doc| doc.payload.graph())
                             .and_then(|graph| graph.nodes.get(id))
                             .and_then(|node| node.title.clone())
+                            .or_else(|| {
+                                self.remote_node_display(document_id, id)
+                                    .and_then(|display| display.title)
+                            })
+                            .unwrap_or_default()
                     })
                     .unwrap_or_default();
                 self.graph_ui.select_node(node_id, title);
@@ -1972,14 +2005,20 @@ impl App {
             .active_document()
             .and_then(|doc| doc.payload.graph())
             .and_then(|graph| graph.nodes.get(node_id))
-            .map(|node| node.node_type.as_str())
-            .unwrap_or("");
+            .map(|node| node.node_type.clone())
+            .or_else(|| {
+                self.documents
+                    .active_id()
+                    .and_then(|document_id| self.remote_node_display(document_id, node_id))
+                    .map(|display| display.node_type)
+            })
+            .unwrap_or_default();
 
         container(
             column![node_properties_editor(
                 node_id,
                 &self.graph_ui.title_buffer,
-                node_type,
+                &node_type,
                 &self.resolved,
                 &self.accessibility,
             )

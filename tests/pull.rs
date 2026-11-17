@@ -163,9 +163,44 @@ fn open_indexes_notation_tip_edge_as_remote_without_proxy() {
     let registry = aura_imp::aura_registry().expect("registry");
     let remotes = aura_editor::indexed_remote_nodes(graph, &root, &registry).expect("index");
     let remote = remotes.get(NOTATION_TIP_ID).expect("remote notation tip");
-    assert_eq!(remote.display.node_type, aura_editor::NOTATION_SCORE_NODE_TYPE);
+    assert_eq!(remote.display.node_type, aura_editor::NOTATION_NODE_TYPE);
+    assert_eq!(remote.display.title.as_deref(), Some("arp"));
     assert!(remote.ports.outputs.iter().any(|p| p == "score"));
     assert!(!store.get(id).expect("doc").dirty);
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn selecting_remote_notation_fills_title_buffer_from_document() {
+    let root = temp_content_root();
+    fs::copy(fixture("notation.json"), root.join("arp.json")).expect("copy notation");
+    let graph_json = format!(
+        r#"{{
+          "type": "imp-graph",
+          "nodes": {{
+            "loop1": {{ "id": "loop1", "type": "loop", "inputs": {{}}, "title": "loop" }}
+          }},
+          "edges": {{
+            "arp_to_loop": {{
+              "from": {{ "node": "{NOTATION_TIP_ID}", "port": "score" }},
+              "to": {{ "node": "loop1", "port": "value" }}
+            }}
+          }}
+        }}"#
+    );
+    fs::write(root.join("parent.json"), graph_json).expect("write graph");
+
+    let mut app = App::with_bindings(Bindings::empty());
+    app.open_workspace_in_memory(&root).expect("session");
+    let id = app.open_pulled_node_tab("loop1").expect("open parent");
+    let _ = app.update(Message::Graph {
+        document_id: id,
+        edit: GraphEdit::SelectNode {
+            node_id: Some(NOTATION_TIP_ID.into()),
+        },
+    });
+    assert_eq!(app.graph_ui().selected_node.as_deref(), Some(NOTATION_TIP_ID));
+    assert_eq!(app.graph_ui().title_buffer, "arp");
     let _ = fs::remove_dir_all(&root);
 }
 

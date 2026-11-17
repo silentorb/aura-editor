@@ -19,6 +19,7 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 {
   "type": "notation",
   "id": "01JNOTATIONTIP000000000001",
+  "title": "arp",
   "version": 1,
   "tempoBpm": 120,
   "timeSignature": { "beatsPerBar": 4, "beatUnit": 4 },
@@ -29,7 +30,7 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 ```
 
 - Pitch uses scientific notation labels with middle C = `C4` = semitone `60` (A4 = 69), matching Aura engine `Semitone` encoding.
-- Event fields align with engine `NoteEvent` / `Score`. The editor keeps its own `aura_ext_notation` serde model for the piano roll; the engine loads the same on-disk schema when host-resolving tip NodeIds. Schemas must stay compatible. Tip-level `id` is required for Miro host indexing.
+- Event fields align with engine `NoteEvent` / `Score`. The editor keeps its own `aura_ext_notation` serde model for the piano roll; the engine loads the same on-disk schema when host-resolving NodeIds. Schemas must stay compatible. Document-level `id` is required for Miro host indexing. Optional `title` is the same display title Imp nodes carry; anything that maps to a node may have an optional title.
 - Per-note `params` are omitted in v1; `velocity` defaults to `1.0` when absent.
 
 ## Create, open, and save

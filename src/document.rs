@@ -102,7 +102,7 @@ impl ModelGraph {
             node_id.clone(),
             Node {
                 id: node_id.clone(),
-                title: None,
+                title: notation.title.clone(),
                 node_type: NOTATION_SCORE_NODE_TYPE.to_string(),
                 type_args: Vec::new(),
                 inputs: BTreeMap::new(),
@@ -467,12 +467,21 @@ mod tests {
     fn notation_tip_id_becomes_model_node_id() {
         let mut notation = Notation::empty();
         notation.id = Some("TIPID00000000000000000001".into());
+        notation.title = Some("arp".into());
         let model = ModelGraph::from_notation(notation);
         assert!(model.graph.nodes.contains_key("TIPID00000000000000000001"));
         assert!(!model.graph.nodes.contains_key(NOTATION_SCORE_NODE_ID));
         assert_eq!(
             model.notation().expect("notation").tip_node_id(),
             "TIPID00000000000000000001"
+        );
+        assert_eq!(
+            model
+                .graph
+                .nodes
+                .get("TIPID00000000000000000001")
+                .and_then(|node| node.title.as_deref()),
+            Some("arp")
         );
     }
 
