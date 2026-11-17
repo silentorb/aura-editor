@@ -1,4 +1,4 @@
-//! Miro pull → ModelGraph by NodeId (primary open + missing-card resolve).
+//! Miro-profile pull → ModelGraph by NodeId (primary open + missing-card resolve).
 
 use std::fs;
 use std::path::PathBuf;
@@ -18,7 +18,7 @@ fn fixture(name: &str) -> PathBuf {
 
 fn temp_content_root() -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
-        "aura-editor-miro-{}-{}",
+        "aura-editor-host-{}-{}",
         std::process::id(),
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -36,8 +36,8 @@ fn pulls_imp_graph_into_model_graph_by_node_id() {
     fs::copy(fixture("sine.json"), root.join("sine.json")).expect("copy");
 
     let mut app = App::with_bindings(Bindings::empty());
-    app.open_miro_workspace_in_memory(&root).expect("session");
-    let id = app.open_miro_node_tab(SINE_OSC_NODE).expect("pull");
+    app.open_workspace_in_memory(&root).expect("session");
+    let id = app.open_pulled_node_tab(SINE_OSC_NODE).expect("pull");
 
     let doc = app.documents().get(id).expect("doc");
     let graph = doc.payload.graph().expect("imp graph");
@@ -47,7 +47,7 @@ fn pulls_imp_graph_into_model_graph_by_node_id() {
         .any(|node| node.title.as_deref() == Some("osc")));
     assert_eq!(
         app.documents().origin(id),
-        Some(&DocumentOrigin::Miro {
+        Some(&DocumentOrigin::Pulled {
             content_root: root.clone(),
             node_id: SINE_OSC_NODE.into(),
             mir_record_id: "sine.json".into(),
@@ -62,8 +62,8 @@ fn pulls_notation_into_embedded_model_by_tip_id() {
     fs::copy(fixture("notation.json"), root.join("notation.json")).expect("copy");
 
     let mut app = App::with_bindings(Bindings::empty());
-    app.open_miro_workspace_in_memory(&root).expect("session");
-    let id = app.open_miro_node_tab(NOTATION_TIP_ID).expect("pull");
+    app.open_workspace_in_memory(&root).expect("session");
+    let id = app.open_pulled_node_tab(NOTATION_TIP_ID).expect("pull");
 
     let doc = app.documents().get(id).expect("doc");
     let notation = doc.payload.notation().expect("notation");
@@ -79,8 +79,8 @@ fn pull_preserves_dangling_edge_topology() {
     fs::copy(fixture("dangling-edge.json"), root.join("dangling.json")).expect("copy");
 
     let mut app = App::with_bindings(Bindings::empty());
-    app.open_miro_workspace_in_memory(&root).expect("session");
-    let id = app.open_miro_node_tab(DANGLING_OUT_NODE).expect("pull");
+    app.open_workspace_in_memory(&root).expect("session");
+    let id = app.open_pulled_node_tab(DANGLING_OUT_NODE).expect("pull");
 
     let graph: &Graph = app
         .documents()
@@ -97,16 +97,16 @@ fn pull_preserves_dangling_edge_topology() {
 }
 
 #[test]
-fn miro_reopen_dedupes_same_mir_blob() {
+fn pulled_reopen_dedupes_same_mir_blob() {
     let root = temp_content_root();
     fs::copy(fixture("sine.json"), root.join("sine.json")).expect("copy");
 
     let mut app = App::with_bindings(Bindings::empty());
-    app.open_miro_workspace_in_memory(&root).expect("session");
-    let id1 = app.open_miro_node_tab(SINE_OSC_NODE).expect("pull");
+    app.open_workspace_in_memory(&root).expect("session");
+    let id1 = app.open_pulled_node_tab(SINE_OSC_NODE).expect("pull");
     // Different node in the same file → same tab.
     let id2 = app
-        .open_miro_node_tab("0033AFBGAW03BV387HWA48PA51")
+        .open_pulled_node_tab("0033AFBGAW03BV387HWA48PA51")
         .expect("reopen");
     assert_eq!(id1, id2);
     assert_eq!(app.documents().documents().len(), 1);
@@ -114,13 +114,13 @@ fn miro_reopen_dedupes_same_mir_blob() {
 }
 
 #[test]
-fn open_miro_node_id_message_opens_tab() {
+fn open_pulled_node_id_message_opens_tab() {
     let root = temp_content_root();
     fs::copy(fixture("sine.json"), root.join("sine.json")).expect("copy");
 
     let mut app = App::with_bindings(Bindings::empty());
-    app.open_miro_workspace_in_memory(&root).expect("session");
-    let _ = app.update(Message::OpenMiroNodeId(SINE_OSC_NODE.into()));
+    app.open_workspace_in_memory(&root).expect("session");
+    let _ = app.update(Message::OpenPulledNodeId(SINE_OSC_NODE.into()));
     assert_eq!(app.documents().documents().len(), 1);
     assert!(app
         .documents()
@@ -195,8 +195,8 @@ fn open_node_resolves_missing_card_into_local_map() {
     fs::copy(fixture("ghost-node.json"), root.join("ghost.json")).expect("copy");
 
     let mut app = App::with_bindings(Bindings::empty());
-    app.open_miro_workspace_in_memory(&root).expect("session");
-    let id = app.open_miro_node_tab(DANGLING_OUT_NODE).expect("open dangling");
+    app.open_workspace_in_memory(&root).expect("session");
+    let id = app.open_pulled_node_tab(DANGLING_OUT_NODE).expect("open dangling");
     {
         let graph = app
             .documents()

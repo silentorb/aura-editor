@@ -33,7 +33,7 @@ pub use imp_documents::DocumentId;
 ///
 /// Filesystem opens and Miro pulls are parallel workflows. Miro tabs dedupe by
 /// `(content_root, mir_record_id)`; filesystem tabs dedupe by path. Product Miro
-/// identity is [`DocumentOrigin::Miro::node_id`].
+/// identity is [`DocumentOrigin::Pulled::node_id`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DocumentOrigin {
     /// Loaded (or saved) as a filesystem path.
@@ -42,7 +42,7 @@ pub enum DocumentOrigin {
         path: PathBuf,
     },
     /// Pulled from a Miro SQLite projection for a content root.
-    Miro {
+    Pulled {
         /// Text authoring root for the Miro session.
         content_root: PathBuf,
         /// Product NodeId used to open / resolve this tab.
@@ -57,7 +57,7 @@ impl DocumentOrigin {
     pub fn authoring_path(&self) -> PathBuf {
         match self {
             Self::Filesystem { path } => path.clone(),
-            Self::Miro {
+            Self::Pulled {
                 content_root,
                 mir_record_id,
                 ..
@@ -302,14 +302,14 @@ impl DocumentStore {
     ///
     /// Dedupes on `(content_root, mir_record_id)` so two NodeIds in the same Mir
     /// blob share one tab. Sets the session path from the Mir record id for Save.
-    pub fn open_or_activate_miro(
+    pub fn open_or_activate_pulled(
         &mut self,
         content_root: PathBuf,
         node_id: String,
         mir_record_id: String,
         opened: StackedOpen,
     ) -> Option<DocumentId> {
-        if let Some(id) = self.find_miro_blob(&content_root, &mir_record_id) {
+        if let Some(id) = self.find_pulled_blob(&content_root, &mir_record_id) {
             self.select(id);
             return Some(id);
         }
@@ -325,7 +325,7 @@ impl DocumentStore {
         );
         self.origins.insert(
             id,
-            DocumentOrigin::Miro {
+            DocumentOrigin::Pulled {
                 content_root,
                 node_id,
                 mir_record_id,
@@ -334,9 +334,9 @@ impl DocumentStore {
         Some(id)
     }
 
-    fn find_miro_blob(&self, content_root: &Path, mir_record_id: &str) -> Option<DocumentId> {
+    fn find_pulled_blob(&self, content_root: &Path, mir_record_id: &str) -> Option<DocumentId> {
         self.origins.iter().find_map(|(id, origin)| match origin {
-            DocumentOrigin::Miro {
+            DocumentOrigin::Pulled {
                 content_root: root,
                 mir_record_id: rid,
                 ..
@@ -346,9 +346,9 @@ impl DocumentStore {
     }
 
     /// Finds an open Miro tab whose product open key is `node_id`.
-    pub fn find_miro_by_node_id(&self, node_id: &str) -> Option<DocumentId> {
+    pub fn find_pulled_by_node_id(&self, node_id: &str) -> Option<DocumentId> {
         self.origins.iter().find_map(|(id, origin)| match origin {
-            DocumentOrigin::Miro {
+            DocumentOrigin::Pulled {
                 node_id: open_id, ..
             } if open_id == node_id => Some(*id),
             _ => None,
@@ -523,7 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn miro_origin_dedupes_by_mir_record_id() {
+    fn pulled_origin_dedupes_by_mir_record_id() {
         let mut store = DocumentStore::new();
         let root = PathBuf::from("/content");
         let opened = StackedOpen {
@@ -543,7 +543,7 @@ mod tests {
             }),
         };
         let id1 = store
-            .open_or_activate_miro(
+            .open_or_activate_pulled(
                 root.clone(),
                 "NODEA".into(),
                 "a.json".into(),
@@ -568,7 +568,7 @@ mod tests {
         };
         // Different NodeId, same Mir blob → same tab.
         let id2 = store
-            .open_or_activate_miro(
+            .open_or_activate_pulled(
                 root.clone(),
                 "NODEB".into(),
                 "a.json".into(),
@@ -579,7 +579,7 @@ mod tests {
         assert_eq!(store.documents().len(), 1);
         assert_eq!(
             store.origin(id1),
-            Some(&DocumentOrigin::Miro {
+            Some(&DocumentOrigin::Pulled {
                 content_root: root,
                 node_id: "NODEA".into(),
                 mir_record_id: "a.json".into(),

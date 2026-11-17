@@ -114,8 +114,8 @@ fn missing_path_on_restore_is_skipped() {
 }
 
 #[test]
-fn restores_miro_workspace_and_node_tabs() {
-    let user_dir = temp_user_dir("miro-restore");
+fn restores_workspace_and_node_tabs() {
+    let user_dir = temp_user_dir("host-restore");
     fs::create_dir_all(user_dir.path()).unwrap();
     let workspace = user_dir.path().join("workspace");
     fs::create_dir_all(&workspace).unwrap();
@@ -126,8 +126,8 @@ fn restores_miro_workspace_and_node_tabs() {
     {
         let mut app = app_with_user_dir(user_dir.clone());
         // Disk-backed workspace so restore can reopen the same content root.
-        app.open_miro_workspace(&workspace).expect("workspace");
-        let _ = app.update(Message::OpenMiroNodeId(SINE_OSC_NODE.into()));
+        app.open_workspace(&workspace).expect("workspace");
+        let _ = app.update(Message::OpenPulledNodeId(SINE_OSC_NODE.into()));
         app.flush_user_state_now();
         // Drop the session before restore so the SQLite projection is not locked.
     }
@@ -138,13 +138,13 @@ fn restores_miro_workspace_and_node_tabs() {
         restored.documents().active_document().and_then(|doc| {
             restored.documents().origin(doc.id).cloned()
         }),
-        Some(DocumentOrigin::Miro {
+        Some(DocumentOrigin::Pulled {
             content_root: workspace.clone(),
             node_id: SINE_OSC_NODE.into(),
             mir_record_id: "sine.json".into(),
         })
     );
-    assert!(restored.miro_session().is_some());
+    assert!(restored.session().is_some());
 
     let _ = fs::remove_dir_all(user_dir.path());
 }

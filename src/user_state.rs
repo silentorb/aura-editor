@@ -248,7 +248,7 @@ pub enum OpenDocumentRef {
         path: PathBuf,
     },
     /// Miro-origin tab identified by product NodeId.
-    Miro {
+    Pulled {
         /// Product NodeId used to pull / open.
         #[serde(rename = "nodeId")]
         node_id: String,

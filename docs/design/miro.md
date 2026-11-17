@@ -5,18 +5,18 @@ Declarative requirements for the editor’s Miro app-memory path. Product shell:
 ## Role
 
 - Miro layers for Aura: **text files** (authoring SoT) → **SQLite projection** (Mir sync) → **app memory** (`ModelGraph` tabs) via host **pull**.
-- The editor **must** provide a durable workflow: open a `MiroSession` for a content root (workspace), resolve a product **NodeId** through the Aura host index, pull the Mir blob, and materialize it through the stacked document-type pipeline into a session tab.
+- The editor **must** provide a durable workflow: open a `Session` for a content root (workspace), resolve a product **NodeId** through the Aura host index, pull the Mir blob, and materialize it through the stacked document-type pipeline into a session tab.
 - Product open **must** be Miro-first: **Open Workspace…** then **Open…** (NodeId picker / Ctrl+O). **Open File…** remains a secondary filesystem escape hatch.
 
 ## Identity
 
-- Product Miro open / resolve keys are Imp **NodeId**s (`open_miro_node` / `open_miro_node_tab`).
+- Product Miro open / resolve keys are Imp **NodeId**s (`open_pulled_node` / `open_pulled_node_tab`).
 - Aura maintains a host index over the content root: `imp-graph` local node ids and `notation` tip `id` map to opaque Mir record ids.
 - Mir record ids **may** be path-shaped text-store keys internally; they are **not** the product API and **must not** be joined from a NodeId.
 
 ## Document origin
 
-- Every non-untitled tab records a `DocumentOrigin`: `Filesystem { path }` or `Miro { content_root, node_id, mir_record_id }`.
+- Every non-untitled tab records a `DocumentOrigin`: `Filesystem { path }` or `Pulled { content_root, node_id, mir_record_id }`.
 - Filesystem opens dedupe by path. Miro opens dedupe by `(content_root, mir_record_id)` so multiple NodeIds in the same blob share one tab.
 - Miro tabs expose an authoring path derived from the Mir record id (not from the NodeId) for Save and library-neighbor hints. Save writes the text SoT; it does not write SQLite as authoring truth.
 

@@ -12,7 +12,7 @@ mod graph_catalog;
 mod graph_file;
 mod logging;
 mod menu_bar;
-mod miro;
+mod host;
 mod piano_roll;
 mod piano_roll_ui;
 mod playback;
@@ -25,10 +25,10 @@ pub use document::{
     DocumentId, DocumentOrigin, DocumentPayload, DocumentStore, EmbeddedPayload, GraphDocument,
     ModelGraph, SessionDocument, NOTATION_SCORE_NODE_ID, NOTATION_SCORE_NODE_TYPE,
 };
-pub use miro::{
-    indexed_remote_display, indexed_remote_nodes, miro_node_index, open_miro_node,
-    open_miro_session, open_miro_session_in_memory, session_content_root, IndexedRemote,
-    MiroNodeOpen, MiroOpenError,
+pub use host::{
+    indexed_remote_display, indexed_remote_nodes, host_node_index, open_pulled_node,
+    open_session, open_session_in_memory, session_content_root, IndexedRemote,
+    PulledNodeOpen, HostOpenError,
 };
 pub use aura_integration::authoring_path_for_mir_record;
 pub use extensions::{
@@ -79,7 +79,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aura_imp::{aura_registry, get_node_type, list_node_types};
-use aura_integration::{resolve_local_node, MiroNodeIndex, MiroSession};
+use aura_integration::{resolve_local_node, HostNodeIndex, Session};
 use aura_io_cpal::PlaybackEngine;
 use aura_sample::SampleRate;
 use iced::keyboard::{self, key::Named, Key, Modifiers};
@@ -119,10 +119,10 @@ struct OpenNodeDialog {
 /// Root application state for the editor shell.
 pub struct App {
     documents: DocumentStore,
-    /// Optional Miro session for the open workspace (primary document workflow).
-    miro: Option<MiroSession>,
+    /// Optional host session for the open workspace (Miro profile; primary document workflow).
+    session: Option<Session>,
     /// Cached NodeId index for the open workspace (rebuilt on workspace open / Open…).
-    miro_index: Option<MiroNodeIndex>,
+    host_index: Option<HostNodeIndex>,
     /// Last open/load/save error shown in the status banner.
     last_error: Option<OpenError>,
     /// Non-open status text (playback errors and notices).
@@ -187,10 +187,10 @@ pub enum Message {
     OpenClicked,
     /// Open a filesystem document at this path (Open File… or tests).
     OpenPath(PathBuf),
-    /// Open (or replace) the Miro workspace at this content root.
+    /// Open (or replace) the workspace at this content root.
     OpenWorkspacePath(PathBuf),
-    /// Open a Miro NodeId tab (from the NodeId picker or tests).
-    OpenMiroNodeId(String),
+    /// Open a pulled NodeId tab (from the NodeId picker or tests).
+    OpenPulledNodeId(String),
     /// Filter text in the NodeId open dialog.
     OpenNodeFilter(String),
     /// Highlight a NodeId in the open dialog.
@@ -276,8 +276,8 @@ impl std::fmt::Debug for App {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("App")
             .field("documents", &self.documents)
-            .field("miro_open", &self.miro.is_some())
-            .field("miro_index_len", &self.miro_index.as_ref().map(|i| i.len()))
+            .field("session_open", &self.session.is_some())
+            .field("host_index_len", &self.host_index.as_ref().map(|i| i.len()))
             .field("last_error", &self.last_error)
             .field("status_notice", &self.status_notice)
             .field("bindings", &self.bindings)
@@ -322,8 +322,8 @@ impl App {
         let (theme, resolved, accessibility) = load_native_theme();
         Self {
             documents: DocumentStore::default(),
-            miro: None,
-            miro_index: None,
+            session: None,
+            host_index: None,
             last_error: None,
             status_notice: None,
             bindings,
@@ -358,8 +358,8 @@ impl App {
         let (theme, resolved, accessibility) = load_native_theme();
         let mut app = Self {
             documents: DocumentStore::default(),
-            miro: None,
-            miro_index: None,
+            session: None,
+            host_index: None,
             last_error: None,
             status_notice: None,
             bindings,
@@ -382,86 +382,86 @@ impl App {
         app
     }
 
-    /// Active Miro session, when one has been opened programmatically.
-    pub fn miro_session(&self) -> Option<&MiroSession> {
-        self.miro.as_ref()
+    /// Active host session, when one has been opened programmatically.
+    pub fn session(&self) -> Option<&Session> {
+        self.session.as_ref()
     }
 
-    /// Opens or replaces the Miro session for `content_root` (host DB under `.aura/`).
-    pub fn open_miro_workspace(&mut self, content_root: impl Into<PathBuf>) -> Result<(), MiroOpenError> {
+    /// Opens or replaces the host session for `content_root` (host DB under `.aura/`).
+    pub fn open_workspace(&mut self, content_root: impl Into<PathBuf>) -> Result<(), HostOpenError> {
         let content_root = content_root.into();
-        let session = open_miro_session(content_root.clone())?;
-        let index = miro_node_index(&content_root)?;
-        self.miro = Some(session);
-        self.miro_index = Some(index);
+        let session = open_session(content_root.clone())?;
+        let index = host_node_index(&content_root)?;
+        self.session = Some(session);
+        self.host_index = Some(index);
         self.last_error = None;
         Ok(())
     }
 
-    /// Opens an in-memory Miro session for `content_root` (tests).
-    pub fn open_miro_workspace_in_memory(
+    /// Opens an in-memory host session for `content_root` (tests).
+    pub fn open_workspace_in_memory(
         &mut self,
         content_root: impl Into<PathBuf>,
-    ) -> Result<(), MiroOpenError> {
+    ) -> Result<(), HostOpenError> {
         let content_root = content_root.into();
-        let session = open_miro_session_in_memory(content_root.clone())?;
-        let index = miro_node_index(&content_root)?;
-        self.miro = Some(session);
-        self.miro_index = Some(index);
+        let session = open_session_in_memory(content_root.clone())?;
+        let index = host_node_index(&content_root)?;
+        self.session = Some(session);
+        self.host_index = Some(index);
         self.last_error = None;
         Ok(())
     }
 
     /// Rebuilds the cached NodeId index from the active workspace content root.
-    pub fn refresh_miro_index(&mut self) -> Result<(), MiroOpenError> {
-        let Some(session) = self.miro.as_ref() else {
-            self.miro_index = None;
-            return Err(MiroOpenError::Document(OpenError::Invalid {
-                path: PathBuf::from("miro"),
-                reason: String::from("no Miro session open"),
+    pub fn refresh_host_index(&mut self) -> Result<(), HostOpenError> {
+        let Some(session) = self.session.as_ref() else {
+            self.host_index = None;
+            return Err(HostOpenError::Document(OpenError::Invalid {
+                path: PathBuf::from("host"),
+                reason: String::from("no host session open"),
             }));
         };
-        let index = miro_node_index(session.content_root())?;
-        self.miro_index = Some(index);
+        let index = host_node_index(session.content_root())?;
+        self.host_index = Some(index);
         Ok(())
     }
 
-    /// Pulls the Mir blob for `node_id` from the active Miro session into a tab.
+    /// Pulls the Mir blob for `node_id` from the active host session into a tab.
     ///
     /// Resolves through the host NodeId index; dedupes on Mir blob. Returns the
     /// active document id.
-    pub fn open_miro_node_tab(&mut self, node_id: &str) -> Result<DocumentId, MiroOpenError> {
-        if self.miro.is_none() {
-            return Err(MiroOpenError::Document(OpenError::Invalid {
-                path: PathBuf::from("miro"),
-                reason: String::from("no Miro session open"),
+    pub fn open_pulled_node_tab(&mut self, node_id: &str) -> Result<DocumentId, HostOpenError> {
+        if self.session.is_none() {
+            return Err(HostOpenError::Document(OpenError::Invalid {
+                path: PathBuf::from("host"),
+                reason: String::from("no host session open"),
             }));
         }
         let content_root = self
-            .miro
+            .session
             .as_ref()
             .expect("checked")
             .content_root()
             .to_path_buf();
-        if self.miro_index.is_none() {
-            self.refresh_miro_index()?;
+        if self.host_index.is_none() {
+            self.refresh_host_index()?;
         }
-        let index = self.miro_index.as_ref().expect("refreshed");
+        let index = self.host_index.as_ref().expect("refreshed");
         let pulled = {
-            let session = self.miro.as_mut().expect("checked");
-            open_miro_node(&self.extensions, session, index, node_id)?
+            let session = self.session.as_mut().expect("checked");
+            open_pulled_node(&self.extensions, session, index, node_id)?
         };
         let mir_record_id = pulled.node_ref.mir_record_id.clone();
         let id = self
             .documents
-            .open_or_activate_miro(
+            .open_or_activate_pulled(
                 content_root,
                 pulled.node_id,
                 mir_record_id,
                 pulled.opened,
             )
             .ok_or_else(|| {
-                MiroOpenError::Document(OpenError::Invalid {
+                HostOpenError::Document(OpenError::Invalid {
                     path: PathBuf::from(node_id),
                     reason: String::from("unsupported tip document payload"),
                 })
@@ -632,7 +632,7 @@ impl App {
                     self.last_error = Some(error);
                 }
             },
-            Message::OpenWorkspacePath(path) => match self.open_miro_workspace(&path) {
+            Message::OpenWorkspacePath(path) => match self.open_workspace(&path) {
                 Ok(()) => {
                     self.status_notice = Some(format!("Workspace: {}", path.display()));
                     return self.sync_open_documents_task();
@@ -641,7 +641,7 @@ impl App {
                     self.last_error = Some(error.into_open_error());
                 }
             },
-            Message::OpenMiroNodeId(node_id) => match self.open_miro_node_tab(&node_id) {
+            Message::OpenPulledNodeId(node_id) => match self.open_pulled_node_tab(&node_id) {
                 Ok(_) => {
                     self.open_node_dialog = None;
                     self.status_notice = None;
@@ -667,7 +667,7 @@ impl App {
                     .as_ref()
                     .and_then(|d| d.selected.clone());
                 if let Some(node_id) = selected {
-                    return self.update(Message::OpenMiroNodeId(node_id));
+                    return self.update(Message::OpenPulledNodeId(node_id));
                 }
             }
             Message::OpenNodeCancel => {
@@ -735,17 +735,17 @@ impl App {
                     CMD_DOCUMENT_OPEN_WORKSPACE => return pick_workspace_folder(),
                     CMD_DOCUMENT_OPEN_FILE => return pick_open_file(),
                     CMD_DOCUMENT_OPEN => {
-                        if self.miro.is_none() {
+                        if self.session.is_none() {
                             self.status_notice =
                                 Some(String::from("Open a workspace before opening by NodeId"));
                             return pick_workspace_folder();
                         }
-                        if let Err(error) = self.refresh_miro_index() {
+                        if let Err(error) = self.refresh_host_index() {
                             self.last_error = Some(error.into_open_error());
                             return Task::none();
                         }
                         let selected = self
-                            .miro_index
+                            .host_index
                             .as_ref()
                             .and_then(|index| index.iter().next().map(|(id, _)| id.to_string()));
                         self.open_node_dialog = Some(OpenNodeDialog {
@@ -1061,14 +1061,14 @@ impl App {
             return Task::none();
         }
         self.last_error = None;
-        let keep_miro = matches!(
+        let keep_session = matches!(
             self.documents.origin(document_id),
-            Some(DocumentOrigin::Miro { .. })
+            Some(DocumentOrigin::Pulled { .. })
         ) && self
             .documents
             .origin(document_id)
             .is_some_and(|origin| origin.authoring_path() == path);
-        if keep_miro {
+        if keep_session {
             self.documents.mark_clean(document_id);
         } else {
             self.documents.set_path_and_clean(document_id, path);
@@ -1518,11 +1518,11 @@ impl App {
         };
 
         if let Some(content_root) = entry.content_root.clone() {
-            if let Err(error) = self.open_miro_workspace(&content_root) {
+            if let Err(error) = self.open_workspace(&content_root) {
                 warn!(
                     path = %content_root.display(),
                     %error,
-                    "skipped restoring Miro workspace"
+                    "skipped restoring workspace"
                 );
             }
         }
@@ -1552,9 +1552,9 @@ impl App {
                         }
                     }
                 }
-                OpenDocumentRef::Miro { node_id } => {
-                    if let Err(error) = self.open_miro_node_tab(&node_id) {
-                        warn!(node_id = %node_id, %error, "skipped restoring Miro document");
+                OpenDocumentRef::Pulled { node_id } => {
+                    if let Err(error) = self.open_pulled_node_tab(&node_id) {
+                        warn!(node_id = %node_id, %error, "skipped restoring pulled document");
                     }
                 }
             }
@@ -1568,8 +1568,8 @@ impl App {
                         self.documents.select(id);
                     }
                 }
-                OpenDocumentRef::Miro { node_id } => {
-                    if let Some(id) = self.documents.find_miro_by_node_id(&node_id) {
+                OpenDocumentRef::Pulled { node_id } => {
+                    if let Some(id) = self.documents.find_pulled_by_node_id(&node_id) {
                         self.documents.select(id);
                     }
                 }
@@ -1591,7 +1591,7 @@ impl App {
                     DocumentOrigin::Filesystem { path } => Some(OpenDocumentRef::Filesystem {
                         path: path.clone(),
                     }),
-                    DocumentOrigin::Miro { node_id, .. } => Some(OpenDocumentRef::Miro {
+                    DocumentOrigin::Pulled { node_id, .. } => Some(OpenDocumentRef::Pulled {
                         node_id: node_id.clone(),
                     }),
                 }
@@ -1603,13 +1603,13 @@ impl App {
                 DocumentOrigin::Filesystem { path } => Some(OpenDocumentRef::Filesystem {
                     path: path.clone(),
                 }),
-                DocumentOrigin::Miro { node_id, .. } => Some(OpenDocumentRef::Miro {
+                DocumentOrigin::Pulled { node_id, .. } => Some(OpenDocumentRef::Pulled {
                     node_id: node_id.clone(),
                 }),
             }
         });
         let entry = OpenDocumentsEntry {
-            content_root: self.miro.as_ref().map(|s| s.content_root().to_path_buf()),
+            content_root: self.session.as_ref().map(|s| s.content_root().to_path_buf()),
             open_documents,
             active,
             ..Default::default()
@@ -1648,24 +1648,24 @@ impl App {
             .unwrap_or_default();
         self.graph_ui.select_node(Some(node_id.clone()), title);
 
-        if self.miro.is_none() {
+        if self.session.is_none() {
             self.status_notice = Some(String::from("Open a workspace to resolve missing nodes"));
             return Task::none();
         }
-        if let Err(error) = self.refresh_miro_index() {
+        if let Err(error) = self.refresh_host_index() {
             self.status_notice = Some(error.to_string());
             return Task::none();
         }
 
         let kind = {
-            let Some(index) = self.miro_index.as_ref() else {
+            let Some(index) = self.host_index.as_ref() else {
                 return Task::none();
             };
             match index.get(&node_id) {
                 Some(node_ref) => node_ref.kind.clone(),
                 None => {
                     self.status_notice =
-                        Some(format!("No Miro record indexed for node `{node_id}`"));
+                        Some(format!("No host record indexed for node `{node_id}`"));
                     return Task::none();
                 }
             }
@@ -1673,10 +1673,10 @@ impl App {
 
         if !already_local && kind == "imp-graph" {
             let resolved = {
-                let Some(session) = self.miro.as_ref() else {
+                let Some(session) = self.session.as_ref() else {
                     return Task::none();
                 };
-                let Some(index) = self.miro_index.as_ref() else {
+                let Some(index) = self.host_index.as_ref() else {
                     return Task::none();
                 };
                 match resolve_local_node(session, index, &node_id) {
@@ -1710,9 +1710,9 @@ impl App {
             self.status_notice = None;
         }
 
-        let roles = roles_for_miro_kind(&kind);
+        let roles = roles_for_kind(&kind);
         if self.extensions.resolve_view_for_chain(&roles).is_some() {
-            match self.open_miro_node_tab(&node_id) {
+            match self.open_pulled_node_tab(&node_id) {
                 Ok(_) => {
                     self.status_notice = None;
                     return self.sync_open_documents_task();
@@ -1825,7 +1825,7 @@ impl App {
             let body_size = font_size(&self.resolved, &self.accessibility);
             let filter_lower = dialog_state.filter.to_ascii_lowercase();
             let entries: Vec<(String, String)> = self
-                .miro_index
+                .host_index
                 .as_ref()
                 .map(|index| {
                     index
@@ -2034,7 +2034,7 @@ impl App {
                 Some((role, VIEW_GRAPH_DAG)) => match doc.payload.graph() {
                     Some(graph) => {
                         let content_root = self
-                            .miro
+                            .session
                             .as_ref()
                             .map(|session| session.content_root().to_path_buf())
                             .or_else(|| doc.path.as_ref().and_then(|p| p.parent().map(Path::to_path_buf)));
@@ -2319,7 +2319,7 @@ async fn pick_workspace_folder_async() -> Option<PathBuf> {
         .map(|folder| folder.path().to_path_buf())
 }
 
-fn roles_for_miro_kind(kind: &str) -> Vec<Option<String>> {
+fn roles_for_kind(kind: &str) -> Vec<Option<String>> {
     match kind {
         "imp-graph" => vec![Some(ROLE_IMP_GRAPH.to_string())],
         "notation" => vec![Some(ROLE_NOTATION.to_string())],
