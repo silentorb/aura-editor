@@ -15,7 +15,7 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 
 - The editor is a Rust desktop application.
 - The **supported / default** GUI framework is **Iced** (`cargo run` / Windows Iced export).
-- An **experimental** parallel stack exists: **Tauri 2 + React + Mantine + Bun** under `apps/tauri/`, with a repo-owned container definition at [`docker/Dockerfile`](../../docker/Dockerfile). Session-1 prototype uses **mock** workspace content; host open/play and engine wiring are deferred. Iced remains the product/feature reference for surfaces (tabs, properties, graph-dag, piano-roll, transport); the React shell must implement those with standard desktop/IDE widgets (e.g. real tabs), not hand-rolled Iced-style approximations.
+- An **experimental** parallel stack exists: **Tauri 2 + React + Mantine + Bun** under `apps/tauri/`, with a repo-owned container definition at [`docker/Dockerfile`](../../docker/Dockerfile). Filesystem **Open File…** is bridged via Tauri invoke (summary tabs only); Miro open, editable models, graph-dag/piano-roll canvases, and CPAL playback remain deferred (transport UI is still mock). Appearance defaults to **dark** with a user light/dark toggle. Iced remains the product/feature reference for surfaces (tabs, properties, graph-dag, piano-roll, transport); the React shell must implement those with standard desktop/IDE widgets (e.g. real tabs), not hand-rolled Iced-style approximations.
 - Application logic for the Iced app is structured so unit and headless functional tests can exercise behavior without a real display (see [`testing.md`](testing.md)).
 
 ## Documents and MDI

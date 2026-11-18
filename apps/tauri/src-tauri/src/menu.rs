@@ -1,13 +1,13 @@
 //! Native application menu bar (File / Edit / View / Play).
 //!
 //! Labels and item ids mirror the Iced shell in `aura-editor/src/menu_bar.rs`.
-//! Command dispatch is deferred; clicks are intentionally ignored for now.
+//! Clicks emit `editor://command` for the React shell to handle.
 
 use tauri::menu::{Menu, MenuBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Runtime};
 
 /// Command id strings aligned with Iced / `aura_interfaces` (duplicated so the
-/// experimental host stays decoupled until command wiring lands).
+/// experimental host stays decoupled until a shared core lands).
 const CMD_DOCUMENT_OPEN_WORKSPACE: &str = "document.open-workspace";
 const CMD_DOCUMENT_OPEN: &str = "document.open";
 const CMD_DOCUMENT_OPEN_FILE: &str = "document.open-file";
@@ -17,6 +17,7 @@ const CMD_DOCUMENT_SAVE: &str = "document.save";
 const CMD_DOCUMENT_CLOSE_ACTIVE: &str = "document.close_active";
 const CMD_PLAY_START: &str = "play.start";
 const CMD_PLAY_STOP: &str = "play.stop";
+const CMD_VIEW_TOGGLE_COLOR_SCHEME: &str = "view.toggle-color-scheme";
 
 /// Builds the global File / Edit / View / Play menu bar.
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -30,9 +31,12 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         .text(CMD_DOCUMENT_CLOSE_ACTIVE, "Close")
         .build()?;
 
-    // Edit / View stay as labeled roots until they have items (Iced parity).
+    // Edit stays a labeled root until it has items (Iced parity).
     let edit = SubmenuBuilder::new(app, "Edit").build()?;
-    let view = SubmenuBuilder::new(app, "View").build()?;
+
+    let view = SubmenuBuilder::new(app, "View")
+        .text(CMD_VIEW_TOGGLE_COLOR_SCHEME, "Toggle light/dark")
+        .build()?;
 
     let play = SubmenuBuilder::new(app, "Play")
         .text(CMD_PLAY_START, "Start")
