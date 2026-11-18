@@ -22,7 +22,7 @@ It stays in its own repository so **aura-engine** can remain an independent, hea
 
 ## Application stack
 
-The editor is a **Rust** desktop application using **[Iced](https://iced.rs/)** as the GUI framework. Day-to-day development runs in WSL Linux containers via **aura-workbench**. The intended end-user environment is **Windows**. Workbench provides an on-demand Windows MSVC cross-compile service for shipping the editor binary.
+The editor is a **Rust** desktop application. The default GUI is **[Iced](https://iced.rs/)**. A reversible **Tauri + React + Mantine** experiment is underway to judge whether a heavier web-desktop stack delivers conventional desktop/IDE widget quality and better AI/DX with less hand-rolled chrome—without treating Iced’s custom widget workarounds as something to clone pixel-for-pixel. Day-to-day Iced development runs in WSL Linux containers via **aura-workbench**; the Tauri prototype uses a separate **editor-tauri** Compose service whose Dockerfile lives in this repo. The intended end-user environment is **Windows**. Workbench provides an on-demand Windows MSVC cross-compile service for shipping the Iced editor binary.
 
 Refined requirements live in [`../design/product.md`](../design/product.md), [`../design/extensions.md`](../design/extensions.md), [`../design/input-bindings.md`](../design/input-bindings.md), and [`../design/testing.md`](../design/testing.md). Extension motivation: [`extensions.md`](extensions.md).
 

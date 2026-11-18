@@ -1,0 +1,10 @@
+target
+**/target
+apps/tauri/node_modules
+apps/tauri/dist
+.git
+**/.git
+*.md
+docs
+tests
+assets

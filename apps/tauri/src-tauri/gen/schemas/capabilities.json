@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Default capabilities for the experimental Aura Editor Tauri host","local":true,"windows":["main"],"permissions":["core:default","dialog:default"]}}
