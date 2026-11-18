@@ -63,6 +63,13 @@ bun run tauri dev
 cargo check -p aura_editor_tauri
 ```
 
+Windows viewing uses a portable `.exe` (not an installer) via aura-workbench
+`scripts/run-editor-tauri-windows-build.sh` or the **Build editor Tauri (Windows)** task.
+That export builds with `--features custom-protocol` so the WebView serves embedded
+`frontendDist` (raw `cargo build` without that feature still loads `devUrl`). Output goes
+to the shared `AURA_EDITOR_WIN_OUT` mount next to the Iced export. The Windows host needs
+WebView2 (normally present via Edge).
+
 `dev` keeps line-table debuginfo for workspace crates and omits debuginfo for dependency packages so `target/` stays bounded. If `target/` exceeds ~8 GiB, clean it (`cargo clean`, or the workbench script/task **Clean editor target if large**); a huge `target/` is a defect, not expected.
 
 ## Naming
