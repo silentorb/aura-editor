@@ -25,6 +25,9 @@ pub struct DocumentSummary {
     pub dirty: bool,
     pub summary: String,
     pub properties: Vec<PropertyRow>,
+    /// Bare Imp `{ nodes, edges }` for graph docs (Aura `type` stripped). Absent for notation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub graph: Option<Value>,
 }
 
 /// Native dialog + classify Aura JSON into a document summary (or `None` if cancelled).
@@ -98,6 +101,14 @@ fn summarize_imp_graph(path: &Path, value: &Value) -> Result<DocumentSummary, St
     let title = title_from_path(path);
     let origin = origin_label(path);
     let id = origin.clone();
+    let graph = Value::Object(
+        [
+            ("nodes".to_string(), Value::Object(nodes.clone())),
+            ("edges".to_string(), Value::Object(edges.clone())),
+        ]
+        .into_iter()
+        .collect(),
+    );
 
     Ok(DocumentSummary {
         id,
@@ -105,9 +116,8 @@ fn summarize_imp_graph(path: &Path, value: &Value) -> Result<DocumentSummary, St
         kind: "imp-graph".into(),
         origin: origin.clone(),
         dirty: false,
-        summary: format!(
-            "Imp graph · {node_count} nodes · {edge_count} edges. Graph-dag canvas not ported yet — placeholder content only."
-        ),
+        summary: format!("Imp graph · {node_count} nodes · {edge_count} edges · view-only React Flow"),
+        graph: Some(graph),
         properties: vec![
             PropertyRow {
                 label: "Type".into(),
@@ -153,12 +163,16 @@ mod tests {
     fn opens_imp_graph_fixture_shape() {
         let path = write_temp(
             "graph",
-            r#"{"type":"imp-graph","nodes":{"a":{}},"edges":{}}"#,
+            r#"{"type":"imp-graph","nodes":{"a":{"id":"a","type":"output","inputs":{}}},"edges":{}}"#,
         );
         let summary = open_document_at(&path).unwrap();
         let _ = fs::remove_file(&path);
         assert_eq!(summary.kind, "imp-graph");
         assert!(summary.summary.contains("1 nodes"));
+        let graph = summary.graph.expect("imp-graph must carry graph body");
+        assert!(graph.get("type").is_none());
+        assert!(graph["nodes"].get("a").is_some());
+        assert!(graph["edges"].as_object().unwrap().is_empty());
     }
 
     #[test]
@@ -222,6 +236,7 @@ fn summarize_notation(path: &Path, value: &Value) -> Result<DocumentSummary, Str
         summary: format!(
             "Notation · {events} events · {tempo} BPM · {meter}. Piano-roll view not ported yet — placeholder content only."
         ),
+        graph: None,
         properties: vec![
             PropertyRow {
                 label: "Type".into(),

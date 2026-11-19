@@ -1,4 +1,6 @@
-/** Document tab state for the Tauri shell (summary DTOs, not full ModelGraph). */
+/** Document tab state for the Tauri shell (summaries + Imp graph body when present). */
+
+import type { Graph } from "imp-core-types";
 
 export type DocumentKind = "imp-graph" | "notation";
 
@@ -13,6 +15,8 @@ export type EditorDocument = {
   dirty: boolean;
   summary: string;
   properties: DocumentProperty[];
+  /** Bare Imp graph for `imp-graph` docs; omitted for notation. */
+  graph?: Graph;
 };
 
 export type TransportState = "stopped" | "playing";
@@ -26,10 +30,15 @@ export type DocumentSummaryDto = {
   dirty: boolean;
   summary: string;
   properties: DocumentProperty[];
+  graph?: Graph;
 };
 
 export function documentFromDto(dto: DocumentSummaryDto): EditorDocument {
   return { ...dto };
+}
+
+export function emptyImpGraph(): Graph {
+  return { nodes: {}, edges: {} };
 }
 
 export function newUntitledDocument(kind: DocumentKind): EditorDocument {
@@ -43,12 +52,13 @@ export function newUntitledDocument(kind: DocumentKind): EditorDocument {
     dirty: true,
     summary:
       kind === "imp-graph"
-        ? "Untitled Imp graph · empty. Graph-dag canvas not ported yet — placeholder content only."
+        ? "Untitled Imp graph · empty · view-only React Flow"
         : "Untitled notation · empty. Piano-roll view not ported yet — placeholder content only.",
     properties: [
       { label: "Id", value: id },
       { label: "Type", value: kind },
       { label: "Title", value: title },
     ],
+    ...(kind === "imp-graph" ? { graph: emptyImpGraph() } : {}),
   };
 }

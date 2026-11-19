@@ -1,0 +1,24 @@
+.root {
+  position: relative;
+  width: 100%;
+  /* Explicit size — % height collapses in the AppShell/Tabs flex chain. */
+  height: min(60vh, 640px);
+  min-height: 320px;
+  border: 1px solid var(--mantine-color-default-border);
+  border-radius: var(--mantine-radius-sm);
+  overflow: hidden;
+  background: var(--mantine-color-body);
+}
+
+.flow {
+  width: 100%;
+  height: 100%;
+}
+
+.empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mantine-color-default);
+}

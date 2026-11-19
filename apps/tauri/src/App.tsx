@@ -30,11 +30,13 @@ import {
 } from "./commands";
 import {
   documentFromDto,
+  emptyImpGraph,
   newUntitledDocument,
   type DocumentSummaryDto,
   type EditorDocument,
   type TransportState,
 } from "./documents";
+import { ImpGraphCanvas } from "./ImpGraphCanvas";
 import classes from "./App.module.css";
 
 export default function App() {
@@ -313,13 +315,17 @@ export default function App() {
                     {doc.title}
                   </Title>
                   <Text size="sm">{doc.summary}</Text>
-                  <Box mt="lg" className={classes.canvasPlaceholder}>
-                    <Text size="sm" c="dimmed" ta="center">
-                      {doc.kind === "imp-graph"
-                        ? "graph-dag canvas placeholder"
-                        : "piano-roll canvas placeholder"}
-                    </Text>
-                  </Box>
+                  {doc.kind === "imp-graph" ? (
+                    <Box className={classes.canvas}>
+                      <ImpGraphCanvas graph={doc.graph ?? emptyImpGraph()} />
+                    </Box>
+                  ) : (
+                    <Box mt="lg" className={classes.canvasPlaceholder}>
+                      <Text size="sm" c="dimmed" ta="center">
+                        piano-roll canvas placeholder
+                      </Text>
+                    </Box>
+                  )}
                 </Box>
               </Tabs.Panel>
             ))}

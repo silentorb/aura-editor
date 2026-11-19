@@ -2,7 +2,7 @@
 
 ## Project
 
-Aura Editor (`aura-editor`) is the GUI frontend and DAW-like surface for Aura. It is oriented as a music/audio **designer** rather than a traditional DAW for manually editing music/audio data. The **default** application stack is Rust with **Iced**. An **experimental** Tauri 2 + React + Mantine + Bun UI lives under `apps/tauri/` (filesystem Open File bridged; playback still mock; may be rolled back).
+Aura Editor (`aura-editor`) is the GUI frontend and DAW-like surface for Aura. It is oriented as a music/audio **designer** rather than a traditional DAW for manually editing music/audio data. The **default** application stack is Rust with **Iced**. An **experimental** Tauri 2 + React + Mantine + Bun UI lives under `apps/tauri/` (filesystem Open File bridged; Imp graphs shown view-only via sibling `imp-graph-view` + React Flow; edit/save and playback still deferred; may be rolled back).
 
 This repository stays separate so **aura-engine** can remain an independent, headless product. The editor will likely share most engine dependencies and add a larger GUI and OS-integration stack the engine does not need.
 
