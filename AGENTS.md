@@ -2,13 +2,13 @@
 
 ## Project
 
-Aura Editor (`aura-editor`) is the GUI frontend and DAW-like surface for Aura. It is oriented as a music/audio **designer** rather than a traditional DAW for manually editing music/audio data. The **default** application stack is Rust with **Iced**. An **experimental** Tauri 2 + React + Mantine + Bun UI lives under `apps/tauri/` (filesystem Open File bridged; Imp graphs shown view-only via sibling `imp-graph-view` + React Flow; edit/save and playback still deferred; may be rolled back).
+Aura Editor (`aura-editor`) is the GUI frontend and DAW-like surface for Aura. It is oriented as a music/audio **designer** rather than a traditional DAW for manually editing music/audio data. The application stack is Rust with **Iced**.
 
 This repository stays separate so **aura-engine** can remain an independent, headless product. The editor will likely share most engine dependencies and add a larger GUI and OS-integration stack the engine does not need.
 
-**Container:** experimental Tauri/dev image is defined here at [`docker/Dockerfile`](docker/Dockerfile) (Compose service `editor-tauri` in aura-workbench). Future CI should use this repo-owned definition; a shared Imp Lab LCD base may be extracted later.
-
 It provides means to hand-craft data and configuration while preserving Aura’s procedural, declarative spirit.
+
+The experimental **Tauri + React** Imp desktop shell lives in **[imp-lab](https://github.com/silentorb/imp-lab)** (`apps/tauri/`), not here. Aura may later add a thin audio/product host on that stack; that is not in this repo today.
 
 ## Source of truth
 
@@ -37,38 +37,18 @@ When reversing a direction: add a brief avoided-approach requirement in design; 
 
 This file governs **aura-editor** only. Orchestration (Compose, Dev Container, multi-repo mounts) lives in **aura-workbench**, not here.
 
-Workspace members include `aura_interfaces`, `aura_ext_builtin`, `aura_ext_notation`, and experimental `apps/tauri/src-tauri` (`aura_editor_tauri`). Imp Lab path dependencies: `imp_documents` (document session store) and `imp_graph_editor` (graph-dag UI building blocks). See [`docs/design/graph-dag.md`](docs/design/graph-dag.md).
+Workspace members include `aura_interfaces`, `aura_ext_builtin`, and `aura_ext_notation`. Imp Lab path dependencies: `imp_documents` (document session store) and `imp_graph_editor` (graph-dag UI building blocks). See [`docs/design/graph-dag.md`](docs/design/graph-dag.md).
 
 ## Commands
 
 From the repo root (with GUI system deps available — typically the workbench **editor** service):
 
 ```bash
-cargo build --workspace --exclude aura_editor_tauri
-cargo test --workspace --exclude aura_editor_tauri
-cargo clippy --workspace --exclude aura_editor_tauri
+cargo build
+cargo test
+cargo clippy
 cargo run
 ```
-
-(`default-members` omit the Tauri host so plain `cargo test` stays on the Iced path.)
-
-Experimental Tauri UI (workbench **editor-tauri** service):
-
-```bash
-cd apps/tauri
-bun install
-bun run build
-bun run tauri dev
-# Rust host:
-cargo check -p aura_editor_tauri
-```
-
-Windows viewing uses a portable `.exe` (not an installer) via aura-workbench
-`scripts/run-editor-tauri-windows-build.sh` or the **Build editor Tauri (Windows)** task.
-That export builds with `--features custom-protocol` so the WebView serves embedded
-`frontendDist` (raw `cargo build` without that feature still loads `devUrl`). Output goes
-to the shared `AURA_EDITOR_WIN_OUT` mount next to the Iced export. The Windows host needs
-WebView2 (normally present via Edge).
 
 `dev` keeps line-table debuginfo for workspace crates and omits debuginfo for dependency packages so `target/` stays bounded. If `target/` exceeds ~8 GiB, clean it (`cargo clean`, or the workbench script/task **Clean editor target if large**); a huge `target/` is a defect, not expected.
 

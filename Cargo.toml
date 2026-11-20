@@ -4,14 +4,6 @@ members = [
     "crates/aura_interfaces",
     "crates/aura_ext_builtin",
     "crates/aura_ext_notation",
-    "apps/tauri/src-tauri",
-]
-# Iced path (editor service) must not require WebKit/GTK from the Tauri host.
-default-members = [
-    ".",
-    "crates/aura_interfaces",
-    "crates/aura_ext_builtin",
-    "crates/aura_ext_notation",
 ]
 resolver = "2"
 
