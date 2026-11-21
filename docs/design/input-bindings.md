@@ -2,6 +2,8 @@
 
 Declarative requirements for configurable input→command bindings. Motivation: [`../scoping/product.md`](../scoping/product.md).
 
+**Active host = Imp Lab Tauri** (`imp-lab` `apps/tauri/`). This Iced app remains deprecated historical reference. Lab’s living feature doc (including the Tauri/Electron accelerator gap): [imp-lab `docs/features/input-bindings.md`](https://github.com/silentorb/imp-lab/blob/main/docs/features/input-bindings.md).
+
 ## Role
 
 - The editor maps user input to **commands** through a configurable bindings layer.
