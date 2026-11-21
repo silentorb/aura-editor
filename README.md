@@ -4,9 +4,11 @@ GUI frontend and DAW-like surface for [Aura](https://github.com/silentorb/aura-e
 
 ## Status
 
-Rust / [Iced](https://iced.rs/) multi-document shell: open single Imp graph files into tabs and view them as an automatic Canvas DAG (pan/zoom; no freeform node placement). The Imp graph-dag surface and chrome building blocks live in **imp-lab**’s `imp_graph_editor` crate; this package hosts them with Aura JSON, playback, and extension wiring. Commands and views register as extension components (see [`docs/design/extensions.md`](docs/design/extensions.md)). Product intent lives under [`docs/`](docs/).
+**Deprecated (Iced).** This Iced Aura Editor is deprecated and will be removed once the Imp Lab Tauri editor path stabilizes. **Do not add new Iced editor features** here.
 
-The experimental Tauri + React Imp desktop shell lives in **[imp-lab](https://github.com/silentorb/imp-lab)** (`apps/tauri/`), not in this repository. Aura remains the Iced product host for audio, notation, and domain extensions.
+The active editor path is **[imp-lab](https://github.com/silentorb/imp-lab)** Tauri (`apps/tauri/`) plus Aura’s optional Lab pack (`aura-engine/lab-pack` + `aura_imp_lab_catalogs` extension). Product intent for the Iced shell remains under [`docs/`](docs/) until removal.
+
+Historical note: Rust / [Iced](https://iced.rs/) multi-document shell hosted **imp-lab** `imp_graph_editor` with Aura JSON, playback, and extension wiring (see [`docs/design/extensions.md`](docs/design/extensions.md)).
 
 ## Development
 

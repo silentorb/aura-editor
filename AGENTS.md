@@ -2,13 +2,11 @@
 
 ## Project
 
-Aura Editor (`aura-editor`) is the GUI frontend and DAW-like surface for Aura. It is oriented as a music/audio **designer** rather than a traditional DAW for manually editing music/audio data. The application stack is Rust with **Iced**.
+Aura Editor (`aura-editor`) is the **deprecated** Iced GUI frontend for Aura. **Do not add new Iced editor features.** It will be removed once Imp Lab Tauri + the Aura Lab pack is stable.
 
-This repository stays separate so **aura-engine** can remain an independent, headless product. The editor will likely share most engine dependencies and add a larger GUI and OS-integration stack the engine does not need.
+The active editor path is **[imp-lab](https://github.com/silentorb/imp-lab)** (`apps/tauri/`) with Aura catalogs supplied via `aura-engine`’s Lab pack / `aura_imp_lab_catalogs` extension—not by depending on this Iced app.
 
-It provides means to hand-craft data and configuration while preserving Aura’s procedural, declarative spirit.
-
-The experimental **Tauri + React** Imp desktop shell lives in **[imp-lab](https://github.com/silentorb/imp-lab)** (`apps/tauri/`), not here. Aura may later add a thin audio/product host on that stack; that is not in this repo today.
+This repository historically hosted Aura JSON, playback, and Iced extension wiring on top of **imp-lab** building blocks so **aura-engine** could stay headless. Prefer Lab Tauri + packs for new work.
 
 ## Source of truth
 
