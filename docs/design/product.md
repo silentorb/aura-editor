@@ -13,9 +13,9 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 
 ## Application stack
 
-- The editor is a Rust desktop application.
+- This repository’s editor is a Rust desktop application.
 - The GUI framework is **Iced** (`cargo run` / Windows Iced export).
-- An experimental **Tauri 2 + React + Mantine** Imp desktop shell lives in **imp-lab** (`apps/tauri/`), not in this repository. That host is the **active** product surface for Imp graphs and Aura notation piano-roll (with Aura Lab pack for catalogs + playback). This Iced app remains deprecated historical reference.
+- The **active** product surface for Imp graphs and Aura notation piano-roll is **Imp Lab** in **imp-lab** (with Aura Lab pack for catalogs + playback), not this repository. This Iced app remains deprecated historical reference.
 - Application logic for the Iced app is structured so unit and headless functional tests can exercise behavior without a real display (see [`testing.md`](testing.md)).
 
 

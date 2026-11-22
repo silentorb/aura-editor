@@ -2,13 +2,13 @@
 
 Declarative requirements for the hand-crafted notation piano-roll view. Product context: [`product.md`](product.md). Extensibility: [`extensions.md`](extensions.md). Motivation: [`../scoping/product.md`](../scoping/product.md).
 
-**Active host:** [Imp Lab Tauri](https://github.com/silentorb/imp-lab) (`apps/tauri/`) with Aura Lab pack playback. The Iced implementation in this repo is historical reference only — do not extend it.
+**Active host:** [Imp Lab](https://github.com/silentorb/imp-lab) with Aura Lab pack playback. The Iced implementation in this repo is historical reference only — do not extend it.
 
 ## Role
 
 - Users can create and edit discrete note events on a time × pitch grid — a classic MIDI piano roll — without making destructive timeline editing the product’s center.
 - Notation is a **complement** to procedural Imp graphs: one plain-text Aura JSON file per notation document, composed later with other files like a programming project (including Imp graphs that wire notation tips by tip NodeId through Miro host resolve).
-- In the editor session, a notation tip is edited as Aura JSON (`type: "notation"`); on-disk tip files are unchanged and are only projected at open/save. (The deprecated Iced host wrapped the tip as a one-node session model; Lab Tauri keeps the tip as the document body.)
+- In the editor session, a notation tip is edited as Aura JSON (`type: "notation"`); on-disk tip files are unchanged and are only projected at open/save. (The deprecated Iced host wrapped the tip as a one-node session model; Imp Lab keeps the tip as the document body.)
 - Embedded notation is the same musical material procedural generators produce: an engine `Score` / `ScoreSignal`. Play from a piano-roll tab auditions that score directly (poly-sine sampler via the Aura Lab playback extension), sharing the Score ontology with `arpeggio` / `bass_line` / `drum_grid` / tip-NodeId remotes.
 
 ## Document type
@@ -38,14 +38,14 @@ Declarative requirements for the hand-crafted notation piano-roll view. Product 
 ## Create, open, and save
 
 - Users may **New** an empty notation document (untitled tab), **Open** an existing `notation` file, and **Save** (Save As when untitled).
-- Lab Tauri open/save round-trips the Aura JSON tip directly. (Iced historically wrapped Open/New as a one-node `ModelGraph` and saved only the embedded tip.)
+- Imp Lab open/save round-trips the Aura JSON tip directly. (Iced historically wrapped Open/New as a one-node `ModelGraph` and saved only the embedded tip.)
 - Edits mark the document dirty; a successful save clears dirty.
 - Untitled tabs are not restored via open-documents user state.
 - Imp graph documents are edited in the graph view, not in the piano roll.
 
 ## View
 
-- Content pane shows the piano-roll UI when the open document kind is `notation` (Lab Tauri). Iced historically resolved role `notation` → view `piano-roll`.
+- Content pane shows the piano-roll UI when the open document kind is `notation` (Imp Lab). Iced historically resolved role `notation` → view `piano-roll`.
 - Layout: left vertical piano lane (chromatic keys with labels such as `C4`, `D#3`); right time × pitch grid with note rectangles.
 - A fixed **ruler strip** sits at the top of the grid. Clicking the ruler parks the **playhead** (respecting snap). A vertical playhead line runs through the ruler and grid.
 - While Play is active, the playhead display advances with the CPAL sample clock; on Stop (or end of score) it snaps back to the parked start position.
@@ -81,7 +81,7 @@ Tool state is editor-global (not per document). Playhead parking is session-only
 
 ## Extension and user state
 
-- Lab Tauri hosts notation as a first-class document kind (open/save/new) with piano-roll UI in the React shell; tool/snap prefs are session UI state (Iced historically persisted them via `aura-notation` / `piano-roll-ui`).
+- Imp Lab hosts notation as a first-class document kind (open/save/new) with piano-roll UI in the React shell; tool/snap prefs are session UI state (Iced historically persisted them via `aura-notation` / `piano-roll-ui`).
 - Iced-only: linked package id `aura-notation` registered the document type, view, tool/save commands, and user-state entry (see [`user-state.md`](user-state.md) / [`extensions.md`](extensions.md)) — not extended further.
 
 ## Non-goals / avoided approaches

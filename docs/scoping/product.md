@@ -22,7 +22,7 @@ It stays in its own repository so **aura-engine** can remain an independent, hea
 
 ## Application stack
 
-The editor is a **Rust** desktop application. The GUI is **[Iced](https://iced.rs/)**. A reversible **Tauri + React + Mantine** Imp desktop-shell experiment lives in **imp-lab** (not here), to judge whether a heavier web-desktop stack delivers conventional desktop/IDE widget quality and better AI/DX with less hand-rolled chrome—without treating Iced’s custom widget workarounds as something to clone pixel-for-pixel. Day-to-day Aura Iced development runs in WSL Linux containers via **aura-workbench**; the Imp Lab Tauri host uses workbench’s **editor-tauri** Compose service (Dockerfile owned by imp-lab). The intended end-user environment is **Windows**. Workbench provides an on-demand Windows MSVC cross-compile service for shipping the Iced editor binary.
+This repository’s editor is a **Rust** desktop application with an **[Iced](https://iced.rs/)** GUI; it is **deprecated**. The active product surface is **Imp Lab** in **imp-lab** (Tauri 2 + React + Mantine; not in this repository). Day-to-day Imp Lab development runs in WSL Linux containers via **aura-workbench**’s **imp-lab** Compose service (Dockerfile owned by imp-lab). Historical Iced work used workbench’s **editor** service. The intended end-user environment is **Windows**. Workbench provides an on-demand Windows MSVC cross-compile for Imp Lab (`imp-lab.exe`) and the legacy Iced binary.
 
 Refined requirements live in [`../design/product.md`](../design/product.md), [`../design/extensions.md`](../design/extensions.md), [`../design/input-bindings.md`](../design/input-bindings.md), and [`../design/testing.md`](../design/testing.md). Extension motivation: [`extensions.md`](extensions.md).
 
@@ -34,7 +34,7 @@ Hand-crafted notation lives in separate Aura JSON files (`type: "notation"`) wit
 
 Open Imp graphs show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Graph editing is always-on (select and drag-to-wire without modal tools, rubber-band while connecting; right-click a Precise port to disconnect); Add node is a command with a type-picker modal; Delete removes the selection. Connection UI toggles between simple node→node wiring and precise port handles. Node layout is automatic only — no freeform dragging of nodes on a canvas. Users may create and save Imp graph documents as well as notation. Notation documents open into the piano-roll view. Start/Stop/Toggle (Space) streams the active Imp graph tab through CPAL (from `t = 0`) or auditions the active notation tab from the parked playhead; saving is not required to play.
 
-**imp-lab** owns Imp graph-network session mechanics and editor building blocks: `imp_documents` (multi-document session store) and `imp_graph_editor` (graph-dag canvas, edit helpers, chrome). Aura Editor remains the host that completes the product UX (Aura payloads such as embedded notation, Aura JSON, playback, extensions, and registry wiring).
+**imp-lab** owns Imp graph-network session mechanics, editor building blocks (`imp_documents`, `imp_graph_editor`), and the active Imp Lab desktop app. Aura catalogs, playback, and related domain wiring ship via Aura’s optional Lab pack rather than this deprecated Iced host.
 
 Refined graph-view requirements: [`../design/graph-dag.md`](../design/graph-dag.md).
 

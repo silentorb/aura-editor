@@ -2,11 +2,11 @@
 
 ## Project
 
-Aura Editor (`aura-editor`) is the **deprecated** Iced GUI frontend for Aura. **Do not add new Iced editor features.** It will be removed once Imp Lab Tauri + the Aura Lab pack is stable.
+Aura Editor (`aura-editor`) is the **deprecated** Iced GUI frontend for Aura. **Do not add new Iced editor features.** It will be removed once Imp Lab + the Aura Lab pack is stable.
 
-The active editor path is **[imp-lab](https://github.com/silentorb/imp-lab)** (`apps/tauri/`) with Aura catalogs supplied via `aura-engine`’s Lab pack / `aura_imp_lab_catalogs` extension—not by depending on this Iced app.
+The active editor path is **[imp-lab](https://github.com/silentorb/imp-lab)** with Aura catalogs supplied via `aura-engine`’s Lab pack / `aura_imp_lab_catalogs` extension—not by depending on this Iced app.
 
-This repository historically hosted Aura JSON, playback, and Iced extension wiring on top of **imp-lab** building blocks so **aura-engine** could stay headless. Prefer Lab Tauri + packs for new work.
+This repository historically hosted Aura JSON, playback, and Iced extension wiring on top of **imp-lab** building blocks so **aura-engine** could stay headless. Prefer Imp Lab + packs for new work.
 
 ## Source of truth
 
