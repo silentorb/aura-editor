@@ -4,118 +4,43 @@ Declarative product requirements for Aura Editor. Motivation and goals: [`../sco
 
 ## Role
 
-- Aura Editor is the GUI frontend and DAW-like surface for Aura.
-- It is a music/audio **designer**: workflows emphasize procedural and declarative design over traditional DAW-style manual editing of music and audio data.
-- Users can hand-craft data and configuration; that capability must not displace Aura’s procedural, declarative model as the product’s center.
-- **Imp graphs** are the primary persistent resources users open and work with (not traditional DAW project bundles).
-- Hand-crafted **notation** (`notation` Aura JSON) is a second on-disk document kind: plain-text beat-grid note events stored as separate files, complementary to procedural graphs. See [`piano-roll.md`](piano-roll.md).
-- **Documents are storage/UI envelopes.** On open, editable tips become an in-memory node graph (`ModelGraph`). An `imp-graph` file loads as its Imp nodes/edges; a `notation` file loads as a one-node session model with Aura-embedded notation (host tip marker, not an Imp catalog type). On-disk JSON shapes are unchanged; save projects the model back to the tip’s file format.
+- Aura Editor is Aura's **editor UI**: everything audio- or music-specific a user sees while designing with Aura.
+- It is a music/audio **designer**: workflows emphasize procedural and declarative design over traditional DAW-style manual editing of music and audio data. Hand-crafted data (notation) complements procedural Imp graphs; it does not displace them.
+- **Imp graphs** are the primary persistent resources users work with, edited in Imp Lab's built-in graph editor. Aura Editor adds editors for Aura's own record kinds, starting with **notation** ([`piano-roll.md`](piano-roll.md)).
 
-## Application stack
+## Layering
 
-- This repository’s editor is a Rust desktop application.
-- The GUI framework is **Iced** (`cargo run` / Windows Iced export).
-- The **active** product surface for Imp graphs and Aura notation piano-roll is **Imp Lab** in **imp-lab** (with Aura Lab pack for catalogs + playback), not this repository. This Iced app remains deprecated historical reference.
-- Application logic for the Iced app is structured so unit and headless functional tests can exercise behavior without a real display (see [`testing.md`](testing.md)).
+- Aura Editor runs **inside Imp Lab** as extensions, not as its own application. Imp Lab ([imp-lab](https://github.com/silentorb/imp-lab)) is a domain-neutral host for Imp graphs and Tome records; Aura Editor supplies the Aura-specific UI.
+- **All audio-specific Tauri UI lives in this repo.** Imp Lab must not contain audio or music concepts (notation, piano roll, audition, recording), even behind generic names; when a piece of Aura UI needs something Lab doesn't offer, the answer is additional, domain-neutral extension support in Imp Lab, not Aura code in Lab.
+- Aura Editor provides **modular components**: its UI library exports implementations by id, and the Aura pack's `extensions.json` chooses and configures them. Nothing here wires itself in.
+- There are no document types: Aura records are **Tome node types**. Notation records are members of the Notations type table `01M80M9N0TAT00000000000001`, which is also the Imp node type of a notation record (`aura_imp::NOTATION_NODE_TYPE`); the two ids stay equal.
+- Aura engine functionality (catalogs, playback, MIDI capture, plugin hosting) comes from **aura-engine**'s extension libraries. Editors talk to them only through the services and topics the pack wires up.
 
+## Distribution
 
-## Documents and MDI
-
-- The editor is a multi-document interface: multiple documents may be open in separate tabs.
-- Users can open a single-graph Aura JSON Imp file (`type: "imp-graph"` plus `nodes` / `edges`) or a notation document (`type: "notation"`), switch tabs, and close documents.
-- Users may create a new empty notation document or a new empty Imp graph (untitled), edit it, and save it to disk (Save As when untitled).
-- Opening a path that is already open activates that tab (no duplicate).
-- An open document stores its document-type chain, view roles, a **document origin** (filesystem path or Miro `content_root` + `node_id` + `mir_record_id`), and a node-backed tip (`ModelGraph` for `imp-graph` and `notation`; generic JSON remains an exception).
-- The document content pane resolves a **view** by walking the type chain from tip to root and using the first role with an enabled view (`imp-graph` → builtin `graph-dag`; `notation` → `piano-roll`).
-- Imp graph documents support create, modify, and save in the `graph-dag` view (see [`graph-dag.md`](graph-dag.md)).
-- Notation documents support create, modify, and save in the piano-roll view, which edits the nullary node’s embedded notation (see [`piano-roll.md`](piano-roll.md)).
-- Workspace content root, Miro/filesystem open tabs, and the active tab are restored from ephemeral user state under the Aura user directory (see [`user-state.md`](user-state.md)); untitled tabs and pan/zoom are not.
-- Primary open is Miro: **Open Workspace…** then **Open…** by **NodeId** (`open_workspace` / `open_pulled_node_tab`). **Open File…** is a secondary filesystem escape hatch; see [`miro.md`](miro.md).
-- Shell body layout (documents and properties panes) is an Iced `pane_grid`: users may drag panes to rearrange and resize splits; the layout tree is persisted as user state (see [`user-state.md`](user-state.md)). The default arrangement is documents | properties, with Properties on the right of Documents. The active view’s tool strip lives inside the Documents pane (below the tab bar). A fixed status bar at the bottom of the window shows errors and transport feedback.
-- Extensibility (commands, views, document types, and user-state) follows [`extensions.md`](extensions.md).
-
-## Graph files
-
-- Aura JSON documents declare a root string **`type`** naming the document-type id.
-- Supported Imp open format: Aura JSON with `type: "imp-graph"` and a single Imp graph object (`nodes` + `edges`).
-- Imp **GraphLibrary** Aura JSON (`type: "imp-graph-library"`, plus `id` + `definitions`) is recognized then rejected with a distinct, typed error (no session tab) until catalog open is designed.
-- Filesystem open (**Open File…**) uses a native dialog; tests and tooling may open by path without a dialog. Primary **Open…** uses the Miro NodeId picker once a workspace is open.
-
-## Notation score files
-
-- Supported notation format: Aura JSON with `type: "notation"` and versioned tempo, time signature, and note events (see [`piano-roll.md`](piano-roll.md)).
-- New File creates an empty notation tip in memory (session tip node + empty embedded notation); Save writes `type: "notation"` Aura JSON from the embedded payload; Open wraps an existing notation file the same way and shows the piano-roll view.
-
-## Graph visualization and editing
-
-- Open graphs are drawn on an Iced Canvas using automatic layout only (petgraph-backed layered layout). See [`graph-dag.md`](graph-dag.md).
-- Users may pan and zoom the canvas; they must not freely drag nodes to persist positions.
-- Editing nodes or connections regenerates layout.
-- Graph pointer editing is always-on (select and wire without modal tools). **Add node** is a command that opens a type-picker modal and inserts immediately; Delete/Backspace removes the selection.
-- Connection UI is toggleable globally: **Simple** (drag node→node with auto port pairing) or **Precise** (drag output port→input port, rubber-band preview; right-click a port to disconnect).
-- Graph view options (including connection mode) live in a far-right toolbar dropdown and apply across all graph tabs.
-
-## Shell chrome
-
-- The shell has a global **menu bar** with File / Edit / View / Play roots. The menu bar is fixed chrome above the dockable pane grid (not itself a rearrangeable pane).
-- File menu exposes document commands (Open, New notation, New graph, Save, Close). Edit and View are reserved for future global actions.
-- Play menu exposes transport commands (Start, Stop). Toggle playback is available as a command (default Space) and need not appear in the menu.
-- Below the menu, the shell body is two named panes in an Iced `pane_grid`: **documents** and **properties**. Panes have title bars for drag rearrange; they are not closable or hideable in this slice. Split ratios are user-resizable.
-- The **documents** pane hosts the tab bar, the active view’s tool strip (graph or piano-roll when applicable, otherwise empty), and the document content. Menus in this slice are not contextual to the active view.
-- The **properties** pane shows a graph node’s Title, Id, and Type in a two-column properties view (editable Title with auto-commit after idle / Enter; read-only Id and Type) when a graph node is selected; otherwise an empty-state message. Full input-literal inspection and in-pane type changes remain out of scope (see [`graph-dag.md`](graph-dag.md)).
-- A fixed **status bar** below the pane grid shows the global status line (errors, graph-edit notices, playback state). It is not a rearrangeable pane and is not part of the persisted shell-layout tree.
-- A global application toolbar, further tool panes, floating windows, closable docks, and per-view contextual menus are deferred.
-
-## Playback
-
-- **Start** / **Stop** / **Toggle** (`play.start`, `play.stop`, `play.toggle`) stream audio through CPAL (`PlaybackEngine`).
-- **Imp graph tab:** translate the in-memory session graph (`translate` → sampler), starting at `t = 0`. The playable sink is that graph’s most-output node (prefer title `out`, else the sole `output` node). Saving is not required to play. Neighboring graph libraries may be discovered from the document path as a hint.
-- **Notation / piano-roll tab:** map the open document to an engine `Score` (same type procedural generators emit), audition via a direct score→sampler helper, and start at the parked playhead time (`start_at`). A ruler on the piano roll parks the playhead; while playing the line advances and snaps back on stop or end-of-score.
-- Missing audio devices (common under WSL) surface a status error; the app must not panic.
-
-## Input bindings
-
-- User input maps to editor **commands** through a configurable bindings layer (keyboard first). See [`input-bindings.md`](input-bindings.md).
-- Commands are extension components registered by stable string id; see [`extensions.md`](extensions.md).
-- Bindings load from an optional user JSON file, else a bundled default, else empty; the app runs without bindings.
-- Menus, toolbars, and other UI may invoke the same commands without going through bindings.
+- What ships is `imp-lab.exe` plus the **Aura pack** beside it: `extensions.json` (owned here, [`pack.md`](pack.md)), aura-engine's extension libraries and data, and this repo's UI library.
+- Without the pack, Imp Lab runs as plain Imp Lab; Aura records are listed but not openable.
 
 ## Repository boundaries
 
-- **aura-editor** (this repo) owns the editor UI product, its docs, and its application stack.
-- **aura-engine** remains an independent, headless product; using or building the engine must not require this editor.
-- **aura-workbench** owns Dev Container / Compose orchestration and multi-repo mounts.
+- **aura-editor** (this repo) owns Aura's editor UI implementations, the Aura pack configuration, and their docs.
+- **imp-lab** owns the host: projects, records, the graph editor, the extension system and its UI contract (`imp-lab-ui`).
+- **aura-engine** remains an independent, headless product with the pack's extension libraries (`aura_imp_lab_catalogs`, `aura_imp_lab_playback`) and data (`lab-pack/catalogs`, `lab-pack/demo-project`); using or building the engine must not require this repo.
+- **aura-workbench** owns Dev Container / Compose orchestration, multi-repo mounts and pack assembly / export scripts.
 
-Repos and projects use kebab-case. Rust packages use snake_case (`aura_editor`).
+Repos and projects use kebab-case.
 
-## Dependencies
+## Stack
 
-- The editor may share core dependencies with aura-engine.
-- GUI and OS-integration dependencies belong in this repo (or editor-owned packages), not in aura-engine.
-- Shared Rust conventions (including error handling) follow [`../rust-style.md`](../rust-style.md).
-
-## Dev containers (workbench)
-
-- The workbench **editor** image may derive from the **engine** image while the engine image stays lean (shared Rust toolchain and light audio build deps).
-- If the engine image later accumulates substantial dependencies the editor does not need, stop deriving editor from engine and introduce a shared base image instead.
-- The editor container is for editor build, test, and run only. It is not a place to run the engine test suite.
-- Day-to-day development uses WSL Linux containers. End users target Windows. Workbench provides an on-demand **editor-windows** service (`cargo-xwin`, `x86_64-pc-windows-msvc`) that writes `aura-editor.exe` to a configurable host output mount.
+- TypeScript + React, built to one ES module (`dist/aura_editor.js`) with Vite in library mode.
+- React and Mantine are Imp Lab's shared instances (`imp-lab-ui` `SHARED_MODULE_IDS`), never bundled; CSS is inlined into the module.
+- Tests run with `bun test`.
 
 ## Non-goals / avoided approaches
 
-- Making aura-engine depend on editor UI or OS-integration stacks
+- A separate Aura desktop application or GUI framework (the Iced editor was removed; Imp Lab is the host)
+- Audio-specific code in Imp Lab, or Imp Lab depending on Aura crates or packages
+- Document types layered over Tome node types
+- Self-registering UI code (implementations are wired by configuration)
+- Making aura-engine depend on editor UI
 - Positioning the product primarily as a traditional DAW for manually editing music/audio data
-- Treating hand-crafted data as a replacement for procedural, declarative composition rather than a complement to it
-- Embedding workbench orchestration (Compose / Dev Container entrypoint) inside this editor repo
-- Running the aura-engine test suite inside the editor container
-- Freeform manual node placement on a canvas (layout stays automatic)
-- Persisting pan/zoom camera per document across launches
-- Opening GraphLibrary catalogs as editor documents until that flow is designed
-- Full input-literal property inspector for graph nodes (Properties pane: id rename + read-only type only in this slice; changing type is deferred)
-- Primary/streamlined UI for changing an existing node's type (secondary flow later; mutation helpers may remain for hosts)
-- Continuous scrub of the playhead while audio is running (park + start only)
-- Explicit playback-node override / pinned target (Select playback node deferred; fringe cases TBD)
-- Fully abstracting persistence from Aura operation (paths remain optional library-discovery hints)
-- Overriding native OS input commands via the bindings layer
-
-Background: [`../scoping/background.md`](../scoping/background.md).

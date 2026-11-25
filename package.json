@@ -1,0 +1,31 @@
+{
+  "name": "aura-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Aura's editor UI for Imp Lab: extension UI implementations (notation piano roll) and the Aura pack configuration.",
+  "workspaces": [
+    ".",
+    "../imp-lab/packages/imp-lab-ui"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "imp-lab-ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@mantine/core": "^8.3.6",
+    "@mantine/hooks": "^8.3.6",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "bun-types": "^1.2.19",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.5"
+  }
+}

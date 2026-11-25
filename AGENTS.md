@@ -2,11 +2,11 @@
 
 ## Project
 
-Aura Editor (`aura-editor`) is the **deprecated** Iced GUI frontend for Aura. **Do not add new Iced editor features.** It will be removed once Imp Lab + the Aura Lab pack is stable.
+Aura Editor (`aura-editor`) is **Aura's editor UI**, delivered as **Imp Lab extensions**. It is not a separate application. **All audio-specific Tauri UI belongs in this repo** — never in [imp-lab](https://github.com/silentorb/imp-lab), which stays domain-neutral. When Aura UI needs something Lab can't do, add domain-neutral extension support to imp-lab and keep the Aura part here.
 
-The active editor path is **[imp-lab](https://github.com/silentorb/imp-lab)** with Aura catalogs supplied via `aura-engine`’s Lab pack / `aura_imp_lab_catalogs` extension—not by depending on this Iced app.
-
-This repository historically hosted Aura JSON, playback, and Iced extension wiring on top of **imp-lab** building blocks so **aura-engine** could stay headless. Prefer Imp Lab + packs for new work.
+- `src/` is a UI library: it exports implementations by id (`src/index.ts`) against the `imp-lab-ui` contract and contains no wiring. React and Mantine come from Imp Lab (shared modules), never bundled.
+- `pack/extensions.json` is the Aura pack configuration (owned here): it wires aura-engine's extension libraries and this UI library through components.
+- There are no document types: Aura records are Tome node types (the notation editor edits Notations records).
 
 ## Source of truth
 
@@ -33,34 +33,20 @@ When reversing a direction: add a brief avoided-approach requirement in design; 
 
 ## Workspace
 
-This file governs **aura-editor** only. Orchestration (Compose, Dev Container, multi-repo mounts) lives in **aura-workbench**, not here.
-
-Workspace members include `aura_interfaces`, `aura_ext_builtin`, and `aura_ext_notation`. Imp Lab path dependencies: `imp_documents` (document session store) and `imp_graph_editor` (graph-dag UI building blocks). See [`docs/design/graph-dag.md`](docs/design/graph-dag.md).
+This file governs **aura-editor** only. Orchestration (Compose, Dev Container, multi-repo mounts, pack assembly and Windows export) lives in **aura-workbench**, not here. The imp-lab dependency is the `imp-lab-ui` package (sibling checkout `../imp-lab/packages/imp-lab-ui`, a Bun workspace).
 
 ## Commands
 
-From the repo root (with GUI system deps available — typically the workbench **editor** service):
+From the repo root (Bun; typically the workbench **imp-lab** service):
 
 ```bash
-cargo build
-cargo test
-cargo clippy
-cargo run
+bun install
+bun run test
+bun run build
 ```
 
-`dev` keeps line-table debuginfo for workspace crates and omits debuginfo for dependency packages so `target/` stays bounded. If `target/` exceeds ~8 GiB, clean it (`cargo clean`, or the workbench script/task **Clean editor target if large**); a huge `target/` is a defect, not expected.
+`bun run build` typechecks and writes `dist/aura_editor.js`. `bun run test` includes `pack/extensions.test.ts`, which checks the pack configuration against the engine's and the editor's ids; update it with the configuration.
 
 ## Naming
 
-Repos and projects use **kebab-case** (`aura-editor`). Rust crates use **snake_case** (`aura_editor`).
-
-## Working conventions
-
-- Follow [`docs/rust-style.md`](docs/rust-style.md) for shared Aura/Imp-aligned Rust conventions, including error handling (DRY link to aura-engine’s style guide).
-
-## Where to look
-
-- [`docs/scoping/`](docs/scoping/) — product motivation, goals, background
-- [`docs/design/`](docs/design/) — declarative product design (including [`testing.md`](docs/design/testing.md) and [`extensions.md`](docs/design/extensions.md))
-- [`docs/design/extensions.md`](docs/design/extensions.md) — extension system (commands, views, config)
-- [`docs/rust-style.md`](docs/rust-style.md) — Rust conventions and error handling (links to aura-engine)
+Repos and projects use **kebab-case** (`aura-editor`). Component ids in the pack use dotted `aura.*` ids; implementation ids are kebab-case (`notation-editor`).

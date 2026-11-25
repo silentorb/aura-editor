@@ -1,0 +1,376 @@
+{
+  "version": 1,
+  "extensions": [
+    {
+      "id": "aura-imp-catalogs",
+      "enabled": true,
+      "libraryPath": "extensions/aura_imp_lab_catalogs",
+      "params": {}
+    },
+    {
+      "id": "aura-playback",
+      "enabled": true,
+      "libraryPath": "extensions/aura_imp_lab_playback",
+      "params": {}
+    },
+    {
+      "id": "aura-editor",
+      "enabled": true,
+      "uiLibraryPath": "extensions/aura_editor.js",
+      "params": {}
+    }
+  ],
+  "components": [
+    {
+      "id": "aura-imp-catalogs",
+      "extensionId": "aura-imp-catalogs",
+      "kind": "imp-catalog",
+      "implementationId": "aura-imp-catalogs",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "aura-playback",
+      "extensionId": "aura-playback",
+      "kind": "service",
+      "implementationId": "playback",
+      "enabled": true,
+      "params": {}
+    },
+    {
+      "id": "play.start",
+      "extensionId": "aura-playback",
+      "kind": "command",
+      "implementationId": "play.start",
+      "enabled": true,
+      "params": {
+        "serviceId": "aura-playback",
+        "action": "start"
+      }
+    },
+    {
+      "id": "play.stop",
+      "extensionId": "aura-playback",
+      "kind": "command",
+      "implementationId": "play.stop",
+      "enabled": true,
+      "params": {
+        "serviceId": "aura-playback",
+        "action": "stop"
+      }
+    },
+    {
+      "id": "play.toggle",
+      "extensionId": "aura-playback",
+      "kind": "command",
+      "implementationId": "play.toggle",
+      "enabled": true,
+      "params": {
+        "serviceId": "aura-playback",
+        "action": "toggle"
+      }
+    },
+    {
+      "id": "menu.play.start",
+      "extensionId": "aura-playback",
+      "kind": "menu-item",
+      "implementationId": "play.start",
+      "label": "Start",
+      "enabled": true,
+      "params": {
+        "menu": "Play",
+        "order": 10
+      }
+    },
+    {
+      "id": "menu.play.stop",
+      "extensionId": "aura-playback",
+      "kind": "menu-item",
+      "implementationId": "play.stop",
+      "label": "Stop",
+      "enabled": true,
+      "params": {
+        "menu": "Play",
+        "order": 20
+      }
+    },
+    {
+      "id": "aura.midi",
+      "extensionId": "aura-playback",
+      "kind": "settings-category",
+      "label": "MIDI",
+      "enabled": true
+    },
+    {
+      "id": "aura.midi.input",
+      "extensionId": "aura-playback",
+      "kind": "setting",
+      "label": "Input device",
+      "enabled": true,
+      "params": {
+        "description": "MIDI input played through Aura and recorded into notation. Remembered by name; reconnects when it is plugged back in.",
+        "valueType": "choice",
+        "default": "",
+        "optionsTopic": "aura.midi.ports",
+        "serviceId": "aura-playback"
+      }
+    },
+    {
+      "id": "aura.midi.channels",
+      "extensionId": "aura-playback",
+      "kind": "setting",
+      "label": "Channels",
+      "enabled": true,
+      "params": {
+        "description": "MIDI channels the input listens to. All channels selected is omni.",
+        "valueType": "multi-choice",
+        "default": [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+          "13",
+          "14",
+          "15",
+          "16"
+        ],
+        "options": [
+          {
+            "value": "1",
+            "label": "1"
+          },
+          {
+            "value": "2",
+            "label": "2"
+          },
+          {
+            "value": "3",
+            "label": "3"
+          },
+          {
+            "value": "4",
+            "label": "4"
+          },
+          {
+            "value": "5",
+            "label": "5"
+          },
+          {
+            "value": "6",
+            "label": "6"
+          },
+          {
+            "value": "7",
+            "label": "7"
+          },
+          {
+            "value": "8",
+            "label": "8"
+          },
+          {
+            "value": "9",
+            "label": "9"
+          },
+          {
+            "value": "10",
+            "label": "10"
+          },
+          {
+            "value": "11",
+            "label": "11"
+          },
+          {
+            "value": "12",
+            "label": "12"
+          },
+          {
+            "value": "13",
+            "label": "13"
+          },
+          {
+            "value": "14",
+            "label": "14"
+          },
+          {
+            "value": "15",
+            "label": "15"
+          },
+          {
+            "value": "16",
+            "label": "16"
+          }
+        ],
+        "minSelected": 1,
+        "serviceId": "aura-playback"
+      }
+    },
+    {
+      "id": "aura.midi.input-in-midi",
+      "extensionId": "aura-playback",
+      "kind": "settings-category-item",
+      "enabled": true,
+      "params": {
+        "settingId": "aura.midi.input",
+        "categoryId": "aura.midi",
+        "order": 10
+      }
+    },
+    {
+      "id": "aura.midi.channels-in-midi",
+      "extensionId": "aura-playback",
+      "kind": "settings-category-item",
+      "enabled": true,
+      "params": {
+        "settingId": "aura.midi.channels",
+        "categoryId": "aura.midi",
+        "order": 20
+      }
+    },
+    {
+      "id": "aura.plugins.instrument-choice",
+      "extensionId": "aura-playback",
+      "kind": "node-literal-options",
+      "enabled": true,
+      "params": {
+        "nodeType": "plugin_instrument",
+        "port": "plugin",
+        "optionsTopic": "aura.plugins.instruments"
+      }
+    },
+    {
+      "id": "aura.plugins.effect-choice",
+      "extensionId": "aura-playback",
+      "kind": "node-literal-options",
+      "enabled": true,
+      "params": {
+        "nodeType": "plugin_effect",
+        "port": "plugin",
+        "optionsTopic": "aura.plugins.effects"
+      }
+    },
+    {
+      "id": "aura.plugins.instrument-gui",
+      "extensionId": "aura-playback",
+      "kind": "node-action",
+      "label": "Open plugin GUI",
+      "enabled": true,
+      "params": {
+        "nodeType": "plugin_instrument",
+        "serviceId": "aura-playback",
+        "action": "plugin.open_gui",
+        "editsTopic": "aura.plugins.edits",
+        "order": 10
+      }
+    },
+    {
+      "id": "aura.plugins.effect-gui",
+      "extensionId": "aura-playback",
+      "kind": "node-action",
+      "label": "Open plugin GUI",
+      "enabled": true,
+      "params": {
+        "nodeType": "plugin_effect",
+        "serviceId": "aura-playback",
+        "action": "plugin.open_gui",
+        "editsTopic": "aura.plugins.edits",
+        "order": 10
+      }
+    },
+    {
+      "id": "aura.midi.status",
+      "extensionId": "aura-playback",
+      "kind": "status-item",
+      "label": "MIDI input",
+      "enabled": true,
+      "params": {
+        "topic": "aura.midi.status",
+        "openCategory": "aura.midi",
+        "order": 10
+      }
+    },
+    {
+      "id": "aura.notation-editor",
+      "extensionId": "aura-editor",
+      "kind": "node-type-editor",
+      "implementationId": "notation-editor",
+      "label": "Notation",
+      "enabled": true,
+      "params": {
+        "nodeTypeId": "01M80M9N0TAT00000000000001",
+        "typeTitle": "Notations",
+        "column": "notation",
+        "columnType": "json",
+        "documentType": "notation",
+        "serviceId": "aura-playback"
+      }
+    },
+    {
+      "id": "aura.key.play-toggle",
+      "extensionId": "aura-playback",
+      "kind": "binding",
+      "enabled": true,
+      "params": {
+        "command": "play.toggle",
+        "key": "space"
+      }
+    },
+    {
+      "id": "aura.key.notation-draw",
+      "extensionId": "aura-editor",
+      "kind": "binding",
+      "enabled": true,
+      "params": {
+        "command": "notation.tool.draw",
+        "key": "d"
+      }
+    },
+    {
+      "id": "aura.key.notation-select",
+      "extensionId": "aura-editor",
+      "kind": "binding",
+      "enabled": true,
+      "params": {
+        "command": "notation.tool.select",
+        "key": "s"
+      }
+    },
+    {
+      "id": "aura.key.notation-erase",
+      "extensionId": "aura-editor",
+      "kind": "binding",
+      "enabled": true,
+      "params": {
+        "command": "notation.tool.erase",
+        "key": "e"
+      }
+    },
+    {
+      "id": "aura.key.notation-snap",
+      "extensionId": "aura-editor",
+      "kind": "binding",
+      "enabled": true,
+      "params": {
+        "command": "notation.snap.toggle",
+        "key": "n"
+      }
+    },
+    {
+      "id": "aura.key.notation-record",
+      "extensionId": "aura-editor",
+      "kind": "binding",
+      "enabled": true,
+      "params": {
+        "command": "notation.record.toggle",
+        "key": "r"
+      }
+    }
+  ]
+}

@@ -27,10 +27,6 @@ See [Silent Orb: Scoping and Design](https://silentorb.com/business/product/scop
 
 | Document | Description |
 |----------|-------------|
-| [`product.md`](product.md) | Product-level declarative requirements |
-| [`extensions.md`](extensions.md) | Extension system: components, config, command/view kinds |
-| [`user-state.md`](user-state.md) | Ephemeral user-state buckets under `.aura-user` |
-| [`piano-roll.md`](piano-roll.md) | Notation document, piano-roll view, modal tools, snap |
-| [`graph-dag.md`](graph-dag.md) | Imp graph-dag view, always-on editing, connection modes |
-| [`input-bindings.md`](input-bindings.md) | Configurable input→command bindings |
-| [`testing.md`](testing.md) | Unit and functional testing requirements |
+| [`product.md`](product.md) | Product-level requirements: role, layering on Imp Lab, repository boundaries |
+| [`pack.md`](pack.md) | The Aura pack: configuration ownership, contents, layout |
+| [`piano-roll.md`](piano-roll.md) | Notation records and the piano-roll editor: playback, audition, recording, tools, snap |

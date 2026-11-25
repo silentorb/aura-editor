@@ -1,57 +1,44 @@
 # Product scoping
 
-Motivation and goals for Aura Editor — the GUI frontend and music/audio designer surface for Aura.
+Motivation and goals for Aura Editor — Aura's editor UI, a music/audio designer surface.
 
 ## Vision
 
-Aura Editor is a graphical front end for Aura: a DAW-like environment oriented toward designing music and audio procedurally and declaratively, rather than toward traditional manual editing of stored music and audio data.
+Aura Editor is the graphical side of Aura: a DAW-like environment oriented toward designing music and audio procedurally and declaratively, rather than toward traditional manual editing of stored music and audio data.
 
-It stays in its own repository so **aura-engine** can remain an independent, headless solution. Users who only need the engine should not pull editor UI or OS-integration stacks.
+It stays in its own repository so **aura-engine** can remain an independent, headless solution. Users who only need the engine should not pull editor UI.
 
 ## Goals
 
 - Give users a GUI to work with Aura without abandoning the procedural, declarative spirit of the engine
-- Support hand-crafting data and configuration where that helps design, without making destructive timeline editing the primary model
-- Carry GUI and OS-integration dependencies that the headless engine should not need, while likely sharing most of the engine’s core dependency set
+- Support hand-crafting data where that helps design, without making destructive timeline editing the primary model
 - Position the product as a music/audio **designer**, distinct from a traditional DAW
-- Treat **Imp graphs** as the primary persistent resources (flat, orthogonal UX), rather than traditional DAW “projects” and supporting resource trees
-- Spread Aura content across multiple plain-text files (graphs, notation, and later other resources), composed like a programming project rather than crammed into a single binary project file
-- Treat **documents as storage/UI** for in-memory nodes: opening a file loads a node graph; some tips (e.g. notation) are a single nullary embedded-data node that outputs a static signal
-- Provide a hand-crafted **piano roll** for notation as a complement to procedural generation—useful when fully procedural authoring is too hard—without making destructive timeline editing the center of the product
-- Provide a multi-document interface so users can open multiple documents (graphs and notation) in tabs
+- Treat **Imp graphs** as the primary persistent resources, with hand-crafted records (notation, and later others) as complements
+- Spread Aura content across many small records composed like a programming project, rather than one binary project file
+- Provide a hand-crafted **piano roll** for notation, useful when fully procedural authoring is too hard
 
-## Application stack
+## Built on Imp Lab
 
-This repository’s editor is a **Rust** desktop application with an **[Iced](https://iced.rs/)** GUI; it is **deprecated**. The active product surface is **Imp Lab** in **imp-lab** (Tauri 2 + React + Mantine; not in this repository). Day-to-day Imp Lab development runs in WSL Linux containers via **aura-workbench**’s **imp-lab** Compose service (Dockerfile owned by imp-lab). Historical Iced work used workbench’s **editor** service. The intended end-user environment is **Windows**. Workbench provides an on-demand Windows MSVC cross-compile for Imp Lab (`imp-lab.exe`) and the legacy Iced binary.
+Imp graphs are not Aura-specific: Imp is a general graph language, and **Imp Lab** is its general tool — projects of Tome data stores, records, the graph editor, extensions. Aura Editor is what makes that tool Aura's editor. The plan was always that Imp Lab stays free of audio concepts and all audio-specific UI lives here; the piano roll was for a time built directly into Imp Lab, which was a mistake corrected by moving it into this repo as an extension.
 
-Refined requirements live in [`../design/product.md`](../design/product.md), [`../design/extensions.md`](../design/extensions.md), [`../design/input-bindings.md`](../design/input-bindings.md), and [`../design/testing.md`](../design/testing.md). Extension motivation: [`extensions.md`](extensions.md).
+So Aura Editor is a set of modular extension components rather than its own application:
 
-## Graphs and files
+- The piano roll is a `node-type-editor` implementation, wired by configuration to the Notations node type.
+- Key bindings, menu items, settings and node UI are components in the Aura pack's `extensions.json`, which this repo owns.
+- When Aura's UI needs something the host can't do yet, Imp Lab gains a domain-neutral extension capability (that's how editors for extension node types came about) rather than Aura code.
 
-Aura JSON files declare a root `type` and stack through document types (`json` → `aura-json` → …). Single-graph Imp files (`type: "imp-graph"` plus `nodes` / `edges`) are the first tip users open successfully. Multi-graph catalogs (`type: "imp-graph-library"`) are recognized then rejected until catalog open is designed.
+Tome made "documents" unnecessary: every record is a Tome node, and what it is comes from its node type. Aura's record kinds are Tome node types, not document types.
 
-Hand-crafted notation lives in separate Aura JSON files (`type: "notation"`) with beat-grid note events. In memory those files load as a nullary score node with embedded notation; the piano-roll view edits that node (modal Draw / Select / Erase tools). Notation events are the same engine `Score` material procedural generators produce; Play from a piano-roll tab auditions them through the Imp sine voice path with a user-placed playhead.
+The earlier editor in this repo was a Rust / Iced application hosting Imp Lab's Iced graph-editor crate. Both were removed; there is one host (Imp Lab, Tauri + React) and Aura's UI plugs into it.
 
-Open Imp graphs show an automatic Canvas DAG view (nodes, ids/types, edges) with pan and zoom. Graph editing is always-on (select and drag-to-wire without modal tools, rubber-band while connecting; right-click a Precise port to disconnect); Add node is a command with a type-picker modal; Delete removes the selection. Connection UI toggles between simple node→node wiring and precise port handles. Node layout is automatic only — no freeform dragging of nodes on a canvas. Users may create and save Imp graph documents as well as notation. Notation documents open into the piano-roll view. Start/Stop/Toggle (Space) streams the active Imp graph tab through CPAL (from `t = 0`) or auditions the active notation tab from the parked playhead; saving is not required to play.
-
-**imp-lab** owns Imp graph-network session mechanics, editor building blocks (`imp_documents`, `imp_graph_editor`), and the active Imp Lab desktop app. Aura catalogs, playback, and related domain wiring ship via Aura’s optional Lab pack rather than this deprecated Iced host.
-
-Refined graph-view requirements: [`../design/graph-dag.md`](../design/graph-dag.md).
-
-## Input and commands
-
-Users need a configurable layer between raw input and editor actions so shortcuts (and later other input) can be remapped without hard-coding keystrokes in UI code. Keyboard is the first source; the same command ids should stay usable from global menus, per-view toolbars, and from a future bindings editor. Prefer hand-editable JSON (user file overriding a bundled default) ahead of building that UI. The app should still run when no bindings file is present. Native OS input commands (clipboard, quit, window manager, and similar) stay outside this layer.
-
-Shell chrome splits a fixed global menu (File / Edit / View / Play) and a fixed bottom status bar from a dockable body: documents and properties live in an Iced `pane_grid` so users can rearrange and resize panes, with the layout persisted as user state. The active view’s tool strip sits inside the Documents pane under the tabs. A global application toolbar, further tool panes, closable docks, and contextual per-view menus may come later.
-
-Refined requirements: [`../design/input-bindings.md`](../design/input-bindings.md).
+Refined requirements: [`../design/product.md`](../design/product.md), [`../design/pack.md`](../design/pack.md), [`../design/piano-roll.md`](../design/piano-roll.md).
 
 ## Open questions
 
-- How tightly the editor couples to aura-engine APIs versus file/CLI boundaries
-- Whether everyday authoring stays 1:1 graph-per-file or also embraces GraphLibrary catalogs as first-class multi-document sources
+- Which further Aura record kinds deserve their own editors (instrument definitions, arrangements)
+- Whether Aura UI beyond editors (transport bar, mixer views) needs new UI component kinds in Imp Lab
 
 ## Resolved
 
-- Notation tips are first-class `score` sources inside Imp graphs via tip NodeId + Miro host resolve (no Imp proxy type). Opening a notation tip in the editor uses the same tip id for the piano-roll document.
-- Editor Play from a notation tab uses the embedded notation payload (not a sibling-path resolve of the open tab).
+- Notation records are first-class `score` sources inside Imp graphs, referenced by node id and resolved from the project's data stores.
+- Play from a notation tab uses the open notation (with the parked playhead), not a lookup of a saved file.

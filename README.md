@@ -1,25 +1,25 @@
 # Aura Editor
 
-GUI frontend and DAW-like surface for [Aura](https://github.com/silentorb/aura-engine) — oriented as a music/audio designer.
+Aura's editor UI — a music/audio designer surface for [Aura](https://github.com/silentorb/aura-engine) — delivered as extensions for [Imp Lab](https://github.com/silentorb/imp-lab).
 
-## Status
+Imp Lab is the domain-neutral host (projects of Tome data stores, Imp graph editing, an extension system). Everything audio-specific a user sees lives here, as modular components that the Aura pack's configuration wires into Lab:
 
-**Deprecated (Iced).** This Iced Aura Editor is deprecated and will be removed once Imp Lab stabilizes. **Do not add new Iced editor features** here.
+- `src/` — the UI library (`dist/aura_editor.js`): implementations by id, currently the **notation editor** (piano roll with playback, note audition and recording takes). See [`docs/design/piano-roll.md`](docs/design/piano-roll.md).
+- `pack/extensions.json` — the **Aura pack** configuration: aura-engine's catalog and playback libraries plus this UI library, with their commands, menus, settings, node UI, editors and key bindings. See [`docs/design/pack.md`](docs/design/pack.md).
 
-The active editor path is **[imp-lab](https://github.com/silentorb/imp-lab)** plus Aura’s optional Lab pack (`aura-engine/lab-pack` + `aura_imp_lab_catalogs` extension). Product intent for the Iced shell remains under [`docs/`](docs/) until removal.
-
-Historical note: Rust / [Iced](https://iced.rs/) multi-document shell hosted **imp-lab** `imp_graph_editor` with Aura JSON, playback, and extension wiring (see [`docs/design/extensions.md`](docs/design/extensions.md)).
+What ships is `imp-lab.exe` with the assembled Aura pack beside it (built by aura-workbench).
 
 ## Development
 
-Multi-repo Docker Compose orchestration lives in **aura-workbench**. From this repo root (with GUI system deps available):
+Multi-repo orchestration lives in **aura-workbench**; use its **imp-lab** service (Bun). From this repo root:
 
 ```bash
-cargo build
-cargo test
-cargo clippy
-cargo run
+bun install
+bun run test
+bun run build      # typecheck + dist/aura_editor.js
 ```
+
+Assemble a local pack and run Imp Lab with it from the workbench: `scripts/assemble-aura-pack.sh`, then `IMP_LAB_EXTENSIONS=/workspaces/aura-workbench/.aura-pack/extensions.json`.
 
 ## License
 
