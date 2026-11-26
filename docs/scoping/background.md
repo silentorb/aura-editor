@@ -19,4 +19,4 @@ Traditional DAWs center on manually editing music and audio data (clips, takes, 
 
 ## Dev environment
 
-Primary development is via **aura-workbench** (Dev Container + Compose). This repo is mounted at `/workspaces/aura-workbench/.mnt/aura-editor`; build and test it with Bun in the **imp-lab** service. Do not treat the editor repo root as the Dev Container entrypoint.
+Primary development is via **aura-workbench** (Dev Container + Compose). It is a sibling checkout of the workbench (`/workspaces/aura-editor` inside its containers); build and test it with Bun in the **imp-lab** service (`../aura-workbench/scripts/run imp-lab bun run test`). Do not treat the editor repo root as the Dev Container entrypoint.
